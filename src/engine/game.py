@@ -53,7 +53,7 @@ class Game:
     def update(self):
         dt = self.clock.tick(60) / 1000.0
         self.handle_input()
-        self.player.update(dt)
+        self.player.update(dt, self.map, self.offset_x, self.offset_y)
         
         # Update bombas
         for bomb in self.bombs[:]:

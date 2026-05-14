@@ -33,7 +33,7 @@ class Player:
         image = self.ss.get_image(x, y, 16, 16)
         return pygame.transform.scale(image, (16 * self.scale, 16 * self.scale))
 
-    def update(self, dt):
+    def update(self, dt, game_map, offset_x, offset_y):
         keys = pygame.key.get_pressed()
         self.direction = pygame.Vector2(0, 0)
         self.is_moving = False
@@ -56,8 +56,24 @@ class Player:
             self.is_moving = True
             
         if self.is_moving:
-            self.x += self.direction.x * self.speed
-            self.y += self.direction.y * self.speed
+            # Tamanho real do player na tela
+            p_size = self.tile_size * self.scale # 64
+            # Bounding box reduzida para colisão (mais permissiva, centralizada nos pés)
+            # Bombermans geralmente têm colisão menor que o sprite para facilitar navegação
+            col_width = p_size * 0.6
+            col_height = p_size * 0.4
+            
+            # Movimento X com colisão
+            new_x = self.x + self.direction.x * self.speed
+            if not self._check_collision(new_x + (p_size - col_width)/2, self.y + (p_size - col_height), 
+                                       col_width, col_height, game_map, offset_x, offset_y):
+                self.x = new_x
+
+            # Movimento Y com colisão
+            new_y = self.y + self.direction.y * self.speed
+            if not self._check_collision(self.x + (p_size - col_width)/2, new_y + (p_size - col_height), 
+                                       col_width, col_height, game_map, offset_x, offset_y):
+                self.y = new_y
             
             self.anim_timer += dt
             if self.anim_timer >= self.anim_speed:
@@ -65,6 +81,35 @@ class Player:
                 self.frame_index = (self.frame_index + 1) % len(self.animations[self.current_anim])
         else:
             self.frame_index = 0
+
+    def _check_collision(self, x, y, width, height, game_map, offset_x, offset_y):
+        # Retângulo de colisão do player
+        player_rect = pygame.Rect(x, y, width, height)
+        
+        # Verificar apenas tiles próximos para performance
+        # Converter coordenadas de tela para grid
+        tile_size = game_map.display_tile_size
+        
+        for row in range(game_map.total_size):
+            for col in range(game_map.total_size):
+                # Borda externa
+                is_obstacle = False
+                if row == 0 or row == game_map.total_size - 1 or col == 0 or col == game_map.total_size - 1:
+                    is_obstacle = True
+                else:
+                    inner_row = row - 1
+                    inner_col = col - 1
+                    if game_map.grid[inner_row][inner_col] in [1, 2]: # Parede ou Bloco
+                        is_obstacle = True
+                
+                if is_obstacle:
+                    tile_x = offset_x + col * tile_size
+                    tile_y = offset_y + row * tile_size
+                    tile_rect = pygame.Rect(tile_x, tile_y, tile_size, tile_size)
+                    
+                    if player_rect.colliderect(tile_rect):
+                        return True
+        return False
 
 
     def draw(self, screen):
