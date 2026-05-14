@@ -6,9 +6,9 @@ class Player:
         self.x = x
         self.y = y
         self.tile_size = 16
-        self.scale = 2  # Aumentar para 32x32 para melhor visibilidade
-        self.speed = 2
-        
+        self.scale = 4  # Aumentado para melhor visibilidade
+        self.speed = 4  # Aumentado proporcionalmente
+
         self.ss = SpriteSheet(spritesheet_path)
 
         # Cada frame tem 16x16. 
@@ -30,13 +30,14 @@ class Player:
         self.direction = pygame.Vector2(0, 0)
 
         # Rotina de teste: 3 passos em cada direção
-        # Cada passo ~32 pixels (tamanho do player escalado)
+        # Cada passo ~64 pixels (tamanho do player escalado 4x)
         self.test_routine = [
-            ("run_left", pygame.Vector2(-1, 0), 32 * 3),
-            ("run_down", pygame.Vector2(0, 1), 32 * 3),
-            ("run_right", pygame.Vector2(1, 0), 32 * 3),
-            ("run_up", pygame.Vector2(0, -1), 32 * 3)
+            ("run_left", pygame.Vector2(-1, 0), 64 * 3),
+            ("run_down", pygame.Vector2(0, 1), 64 * 3),
+            ("run_right", pygame.Vector2(1, 0), 64 * 3),
+            ("run_up", pygame.Vector2(0, -1), 64 * 3)
         ]
+
         self.routine_idx = 0
         self.target_dist = self.test_routine[0][2]
         self.traveled = 0

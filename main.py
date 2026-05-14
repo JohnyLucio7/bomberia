@@ -6,8 +6,8 @@ def main():
     pygame.init()
     
     # Configurações básicas
-    SCREEN_WIDTH = 640
-    SCREEN_HEIGHT = 480
+    SCREEN_WIDTH = 800
+    SCREEN_HEIGHT = 800
     FPS = 60
     
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))

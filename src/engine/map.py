@@ -5,7 +5,7 @@ from src.engine.utils import SpriteSheet
 class Map:
     def __init__(self, spritesheet_path):
         self.tile_size = 16
-        self.scale = 2
+        self.scale = 4
         self.display_tile_size = self.tile_size * self.scale
         
         # Tabuleiro 8x8 + Borda de 1 tile em cada lado = 10x10
