@@ -48,54 +48,85 @@ class Explosion:
         self.grid_pos = grid_pos
         self.timer = 0.5 
         self.finished = False
-        self.tiles = [grid_pos] 
         self.scale = scale
         
-        # Carregar animação de explosão (80x80 total, 4 frames -> assumindo 20x20 cada)
         from src.engine.utils import SpriteSheet
-        ss = SpriteSheet("assets/sprites/Bomberman-Explosion.png")
-        self.frames = []
-        for i in range(4):
-            # Recorta frame 20x20 e escala para o tamanho do tile (um pouco maior para sobrepor)
-            frame = ss.get_image(i * 20, 0, 20, 20)
-            self.frames.append(pygame.transform.scale(frame, (int(20 * scale), int(20 * scale))))
+        ss = SpriteSheet("assets/sprites/Bomberman-spritesheet.png")
         
+        # Estrutura dos 4 frames da explosão (9 tiles por frame)
+        # Cada entrada: (row, col) base (o centro da explosão no spritesheet)
+        frame_centers = [(7, 3), (7, 8), (12, 3), (12, 8)]
+        self.frames_tiles = []
+        
+        for r_base, c_base in frame_centers:
+            # Dicionário de tiles para este frame
+            tiles = {
+                'center':    self._get_tile(ss, r_base, c_base),
+                'up_mid':    self._get_tile(ss, r_base - 1, c_base),
+                'up_end':    self._get_tile(ss, r_base - 2, c_base),
+                'down_mid':  self._get_tile(ss, r_base + 1, c_base),
+                'down_end':  self._get_tile(ss, r_base + 2, c_base),
+                'left_mid':  self._get_tile(ss, r_base, c_base - 1),
+                'left_end':  self._get_tile(ss, r_base, c_base - 2),
+                'right_mid': self._get_tile(ss, r_base, c_base + 1),
+                'right_end': self._get_tile(ss, r_base, c_base + 2),
+            }
+            self.frames_tiles.append(tiles)
+            
         self.frame_index = 0
         self.anim_timer = 0
-        self.anim_speed = 0.5 / 4 # Divide o tempo total pelos frames
+        self.anim_speed = 0.5 / 4
         
-        # Calcular propagação
-        directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
-        for dr, dc in directions:
+        # Calcular propagação com tipos de tile
+        self.tiles = [(grid_pos[0], grid_pos[1], 'center')]
+        
+        directions = {
+            (0, 1):  ('right_mid', 'right_end'),
+            (0, -1): ('left_mid', 'left_end'),
+            (1, 0):  ('down_mid', 'down_end'),
+            (-1, 0): ('up_mid', 'up_end')
+        }
+        
+        for (dr, dc), (mid_type, end_type) in directions.items():
             for r in range(1, bomb_range + 1):
                 nr, nc = grid_pos[0] + dr * r, grid_pos[1] + dc * r
                 if 0 <= nr < game_map.grid_size and 0 <= nc < game_map.grid_size:
-                    if game_map.grid[nr][nc] == 1: 
+                    tile_at_map = game_map.grid[nr][nc]
+                    if tile_at_map == 1: # Parede indestrutível
                         break
-                    self.tiles.append((nr, nc))
-                    if game_map.grid[nr][nc] == 2: 
+                    
+                    is_last = (r == bomb_range)
+                    
+                    if tile_at_map == 2: # Bloco destrutível
                         game_map.grid[nr][nc] = 0
+                        self.tiles.append((nr, nc, end_type))
                         break
+                    
+                    if is_last:
+                        self.tiles.append((nr, nc, end_type))
+                    else:
+                        self.tiles.append((nr, nc, mid_type))
                 else:
                     break
+
+    def _get_tile(self, ss, r, c):
+        # L5C3 -> (5-1)*16, (3-1)*16
+        image = ss.get_image((c - 1) * 16, (r - 1) * 16, 16, 16)
+        return pygame.transform.scale(image, (16 * self.scale, 16 * self.scale))
 
     def update(self, dt):
         self.timer -= dt
         if self.timer <= 0:
             self.finished = True
         
-        # Animação
         self.anim_timer += dt
         if self.anim_timer >= self.anim_speed:
             self.anim_timer = 0
-            self.frame_index = min(self.frame_index + 1, len(self.frames) - 1)
+            self.frame_index = min(self.frame_index + 1, len(self.frames_tiles) - 1)
 
     def draw(self, screen, offset_x, offset_y, tile_size):
-        # Centralizar o sprite de 20px (escalado) no tile de 16px (escalado)
-        # 20 * 4 = 80px, 16 * 4 = 64px. Diferença de 16px -> -8px de offset.
-        sprite_offset = (20 * self.scale - tile_size) // 2
-        
-        for r, c in self.tiles:
-            draw_x = offset_x + (c + 1) * tile_size - sprite_offset
-            draw_y = offset_y + (r + 1) * tile_size - sprite_offset
-            screen.blit(self.frames[self.frame_index], (draw_x, draw_y))
+        current_tileset = self.frames_tiles[self.frame_index]
+        for r, c, part_type in self.tiles:
+            draw_x = offset_x + (c + 1) * tile_size
+            draw_y = offset_y + (r + 1) * tile_size
+            screen.blit(current_tileset[part_type], (draw_x, draw_y))
