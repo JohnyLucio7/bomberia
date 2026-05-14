@@ -1,18 +1,36 @@
 import pygame
 
-class Map:
-    def __init__(self, width, height, tile_size):
-        self.width = width
-        self.height = height
-        self.tile_size = tile_size
-        self.grid = [[0 for _ in range(width)] for _ in range(height)]
-        # 0: Empty, 1: Wall (Indestructible), 2: Block (Destructible)
+from src.engine.utils import SpriteSheet
 
-    def draw(self, screen):
-        for y in range(self.height):
-            for x in range(self.width):
-                rect = pygame.Rect(x * self.tile_size, y * self.tile_size, self.tile_size, self.tile_size)
-                if self.grid[y][x] == 1:
-                    pygame.draw.rect(screen, (50, 50, 50), rect)
-                elif self.grid[y][x] == 2:
-                    pygame.draw.rect(screen, (139, 69, 19), rect)
+class Map:
+    def __init__(self, spritesheet_path):
+        self.tile_size = 16
+        self.scale = 2
+        self.display_tile_size = self.tile_size * self.scale
+        
+        # Tabuleiro 8x8 + Borda de 1 tile em cada lado = 10x10
+        self.grid_size = 8
+        self.total_size = self.grid_size + 2
+        
+        self.ss = SpriteSheet(spritesheet_path)
+        self.border_sprite = self._get_sprite(48, 48)
+        self.floor_color = (34, 139, 34) # Verde grama
+
+    def _get_sprite(self, x, y):
+        image = self.ss.get_image(x, y, self.tile_size, self.tile_size)
+        return pygame.transform.scale(image, (self.display_tile_size, self.display_tile_size))
+
+    def draw(self, screen, offset_x, offset_y):
+        for row in range(self.total_size):
+            for col in range(self.total_size):
+                x = offset_x + col * self.display_tile_size
+                y = offset_y + row * self.display_tile_size
+                
+                # Se for a borda
+                if row == 0 or row == self.total_size - 1 or col == 0 or col == self.total_size - 1:
+                    screen.blit(self.border_sprite, (x, y))
+                else:
+                    # Chão (interno 8x8)
+                    pygame.draw.rect(screen, self.floor_color, (x, y, self.display_tile_size, self.display_tile_size))
+                    # Opcional: desenhar grid sutil
+                    pygame.draw.rect(screen, (0, 0, 0), (x, y, self.display_tile_size, self.display_tile_size), 1)
