@@ -30,51 +30,43 @@ class MCTSNode:
         self.wins += result
 
 class MCTSAgent(BaseAgent):
-    def __init__(self, player_id, time_limit=0.015): # 15ms de limite por frame
+    def __init__(self, player_id, time_limit=0.015):
         super().__init__(player_id)
         self.time_limit = time_limit
 
     def get_action(self, state):
         start_time = time.perf_counter()
-        
-        # 1. Fuga Instantânea (BFS) - Custo quase zero
         safety_map = state.get_safety_map()
         my_pos = state.p1_pos if self.player_id == 1 else state.p2_pos
         
+        # 1. Fuga Instantânea se estiver em perigo
         if safety_map[my_pos[0]][my_pos[1]] == 1:
             best_escape = self._find_nearest_safe_tile_move(state, my_pos, safety_map)
             if best_escape: return best_escape
 
-        # 2. MCTS com limite de tempo
+        # 2. MCTS
         root = MCTSNode(state=state, player_id=2 if self.player_id == 1 else 1)
-        
-        iterations = 0
         while time.perf_counter() - start_time < self.time_limit:
-            iterations += 1
             node = root
             state_sim = state.clone()
-
-            # Selection
             while node.untried_moves == [] and node.children != []:
                 node = node.uct_select_child()
                 state_sim.apply_action(node.player_id, node.move)
-                if node.player_id == 2: state_sim.step_time(1.0)
-
-            # Expansion
+                if node.player_id == 2: state_sim.step_time(0.5)
             if node.untried_moves != []:
                 m = random.choice(node.untried_moves)
                 state_sim.apply_action(node.next_player, m)
-                if node.next_player == 2: state_sim.step_time(1.0)
+                if node.next_player == 2: state_sim.step_time(0.5)
                 node = node.add_child(m, state_sim.clone())
-
-            # Rollout ultra-rápido (apenas 5 passos)
-            for _ in range(5):
+            
+            # Rollout
+            for _ in range(8):
                 winner = state_sim.check_winner()
                 if winner is not None: break
                 state_sim.apply_action(1, random.choice(state_sim.get_possible_actions(1)))
                 state_sim.apply_action(2, random.choice(state_sim.get_possible_actions(2)))
-                state_sim.step_time(1.0)
-
+                state_sim.step_time(0.5)
+            
             result = self.evaluate_state(state_sim)
             curr = node
             while curr is not None:
@@ -83,8 +75,6 @@ class MCTSAgent(BaseAgent):
                 curr = curr.parent
 
         if not root.children: return "IDLE"
-        
-        # Filtro final de segurança
         sorted_children = sorted(root.children, key=lambda c: c.visits, reverse=True)
         for child in sorted_children:
             temp_s = state.clone()
@@ -92,7 +82,6 @@ class MCTSAgent(BaseAgent):
             new_p = temp_s.p1_pos if self.player_id == 1 else temp_s.p2_pos
             if safety_map[new_p[0]][new_p[1]] == 0:
                 return child.move
-            
         return sorted_children[0].move
 
     def _find_nearest_safe_tile_move(self, state, start_pos, safety_map):
@@ -117,5 +106,21 @@ class MCTSAgent(BaseAgent):
         if winner == 2: return -1.0
         p1r, p1c = state.p1_pos
         p2r, p2c = state.p2_pos
+        
+        # Sobrevivência
+        p1_h = any(e[0] == p1r and e[1] == p1c for e in state.explosions)
+        p2_h = any(e[0] == p2r and e[1] == p2c for e in state.explosions)
+        if p1_h: return -0.95
+        if p2_h: return 0.95
+
+        # Heurística base
         dist = abs(p1r - p2r) + abs(p1c - p2c)
-        return (16 - dist) / 100.0
+        score = (16 - dist) / 100.0
+        
+        # PACIÊNCIA: Se houver perigo, ficar seguro e parado é lucro
+        if len(state.bombs) > 0 or len(state.explosions) > 0:
+            s_map = state.get_safety_map()
+            if s_map[p1r][p1c] == 0: score += 0.5
+            if s_map[p2r][p2c] == 0: score -= 0.5
+            
+        return score
