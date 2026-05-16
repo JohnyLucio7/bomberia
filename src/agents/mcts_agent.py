@@ -1,0 +1,121 @@
+import math
+import random
+import time
+from src.agents.base_agent import BaseAgent
+
+class MCTSNode:
+    def __init__(self, state, parent=None, move=None, player_id=None):
+        self.state = state
+        self.parent = parent
+        self.move = move
+        self.player_id = player_id 
+        self.children = []
+        self.wins = 0
+        self.visits = 0
+        self.next_player = 1 if player_id == 2 else 2
+        self.untried_moves = state.get_possible_actions(self.next_player)
+
+    def uct_select_child(self):
+        log_v = math.log(self.visits)
+        return sorted(self.children, key=lambda c: c.wins / c.visits + 1.41 * math.sqrt(log_v / c.visits))[-1]
+
+    def add_child(self, move, state):
+        n = MCTSNode(state=state, parent=self, move=move, player_id=self.next_player)
+        self.untried_moves.remove(move)
+        self.children.append(n)
+        return n
+
+    def update(self, result):
+        self.visits += 1
+        self.wins += result
+
+class MCTSAgent(BaseAgent):
+    def __init__(self, player_id, time_limit=0.015): # 15ms de limite por frame
+        super().__init__(player_id)
+        self.time_limit = time_limit
+
+    def get_action(self, state):
+        start_time = time.perf_counter()
+        
+        # 1. Fuga Instantânea (BFS) - Custo quase zero
+        safety_map = state.get_safety_map()
+        my_pos = state.p1_pos if self.player_id == 1 else state.p2_pos
+        
+        if safety_map[my_pos[0]][my_pos[1]] == 1:
+            best_escape = self._find_nearest_safe_tile_move(state, my_pos, safety_map)
+            if best_escape: return best_escape
+
+        # 2. MCTS com limite de tempo
+        root = MCTSNode(state=state, player_id=2 if self.player_id == 1 else 1)
+        
+        iterations = 0
+        while time.perf_counter() - start_time < self.time_limit:
+            iterations += 1
+            node = root
+            state_sim = state.clone()
+
+            # Selection
+            while node.untried_moves == [] and node.children != []:
+                node = node.uct_select_child()
+                state_sim.apply_action(node.player_id, node.move)
+                if node.player_id == 2: state_sim.step_time(1.0)
+
+            # Expansion
+            if node.untried_moves != []:
+                m = random.choice(node.untried_moves)
+                state_sim.apply_action(node.next_player, m)
+                if node.next_player == 2: state_sim.step_time(1.0)
+                node = node.add_child(m, state_sim.clone())
+
+            # Rollout ultra-rápido (apenas 5 passos)
+            for _ in range(5):
+                winner = state_sim.check_winner()
+                if winner is not None: break
+                state_sim.apply_action(1, random.choice(state_sim.get_possible_actions(1)))
+                state_sim.apply_action(2, random.choice(state_sim.get_possible_actions(2)))
+                state_sim.step_time(1.0)
+
+            result = self.evaluate_state(state_sim)
+            curr = node
+            while curr is not None:
+                reward = result if curr.player_id == 1 else -result
+                curr.update(reward)
+                curr = curr.parent
+
+        if not root.children: return "IDLE"
+        
+        # Filtro final de segurança
+        sorted_children = sorted(root.children, key=lambda c: c.visits, reverse=True)
+        for child in sorted_children:
+            temp_s = state.clone()
+            temp_s.apply_action(self.player_id, child.move)
+            new_p = temp_s.p1_pos if self.player_id == 1 else temp_s.p2_pos
+            if safety_map[new_p[0]][new_p[1]] == 0:
+                return child.move
+            
+        return sorted_children[0].move
+
+    def _find_nearest_safe_tile_move(self, state, start_pos, safety_map):
+        queue = [(start_pos, [])]
+        visited = {start_pos}
+        while queue:
+            (r, c), path = queue.pop(0)
+            if safety_map[r][c] == 0:
+                return path[0] if path else "IDLE"
+            for mv, (dr, dc) in {"UP":(-1,0), "DOWN":(1,0), "LEFT":(0,-1), "RIGHT":(0,1)}.items():
+                nr, nc = r+dr, c+dc
+                if 0 <= nr < 8 and 0 <= nc < 8 and state.grid[nr][nc] == 0 and (nr, nc) not in visited:
+                    is_bomb = any(b[0] == nr and b[1] == nc for b in state.bombs)
+                    if not is_bomb:
+                        visited.add((nr, nc))
+                        queue.append(((nr, nc), path + [mv]))
+        return None
+
+    def evaluate_state(self, state):
+        winner = state.check_winner()
+        if winner == 1: return 1.0
+        if winner == 2: return -1.0
+        p1r, p1c = state.p1_pos
+        p2r, p2c = state.p2_pos
+        dist = abs(p1r - p2r) + abs(p1c - p2c)
+        return (16 - dist) / 100.0

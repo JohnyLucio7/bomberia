@@ -25,8 +25,9 @@ class Map:
 
     def _setup_initial_map(self):
         # Paredes fixas (padrão bomberman: intercaladas)
-        for row in range(1, self.grid_size, 2):
-            for col in range(1, self.grid_size, 2):
+        # Em grid 8x8, vamos usar range(1, 7, 2) para garantir que as extremidades (0 e 7) fiquem livres
+        for row in range(1, self.grid_size - 1, 2):
+            for col in range(1, self.grid_size - 1, 2):
                 self.grid[row][col] = 1
 
         # Adicionar alguns blocos destrutíveis aleatórios (exemplo simples)

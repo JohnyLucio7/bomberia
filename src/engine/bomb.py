@@ -22,7 +22,7 @@ class Bomb:
         self.frame_index = 0
         self.anim_timer = 0
         self.anim_speed = 0.2
-        self.player_inside = True # Começa como True porque a bomba nasce sob o player
+        self.players_inside = set() # Conjunto de jogadores que podem atravessar esta bomba
 
     def _get_scaled_frame(self, ss, x, y):
         image = ss.get_image(x, y, 16, 16)
