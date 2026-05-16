@@ -57,6 +57,13 @@ class MCTSAgent(BaseAgent):
                 if abs(my_pos[0]-er) + abs(my_pos[1]-ec) <= 2: is_danger_near = True; break
         
         if is_danger_near and safety_map[my_pos[0]][my_pos[1]] == 0:
+            # Nova Regra: Cercamento Obrigatório em proximidade
+            dist_to_opp = abs(my_pos[0] - opp_pos[0]) + abs(my_pos[1] - opp_pos[1])
+            if dist_to_opp <= 2:
+                has_bomb = not any(b[3] == self.player_id for b in state.bombs)
+                if has_bomb and state.has_escape_route(my_pos[0], my_pos[1]):
+                    return "BOMB"
+            
             self.prev_move = "IDLE"
             return "IDLE"
 
