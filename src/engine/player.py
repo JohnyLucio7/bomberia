@@ -67,19 +67,19 @@ class Player:
                 if not player_rect.colliderect(bomb_rect):
                     bomb.player_inside = False
 
-        if keys[pygame.K_LEFT]:
+        if keys[pygame.K_LEFT] or keys[pygame.K_a]:
             self.direction.x = -1
             self.current_anim = "run_left"
             self.is_moving = True
-        elif keys[pygame.K_RIGHT]:
+        elif keys[pygame.K_RIGHT] or keys[pygame.K_d]:
             self.direction.x = 1
             self.current_anim = "run_right"
             self.is_moving = True
-        elif keys[pygame.K_UP]:
+        elif keys[pygame.K_UP] or keys[pygame.K_w]:
             self.direction.y = -1
             self.current_anim = "run_up"
             self.is_moving = True
-        elif keys[pygame.K_DOWN]:
+        elif keys[pygame.K_DOWN] or keys[pygame.K_s]:
             self.direction.y = 1
             self.current_anim = "run_down"
             self.is_moving = True
