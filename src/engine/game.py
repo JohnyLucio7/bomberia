@@ -147,8 +147,8 @@ class Game:
         if p1_act == "BOMB": self._place_bomb(self.player1)
         if p2_act == "BOMB": self._place_bomb(self.player2)
 
-        self.player1.update(dt, self.map, self.offset_x, self.offset_y, self.bombs, p1_act)
-        self.player2.update(dt, self.map, self.offset_x, self.offset_y, self.bombs, p2_act)
+        self.player1.update(dt, self.map, self.offset_x, self.offset_y, self.bombs, p1_act, other_player=self.player2)
+        self.player2.update(dt, self.map, self.offset_x, self.offset_y, self.bombs, p2_act, other_player=self.player1)
         
         for bomb in self.bombs[:]:
             bomb.update(dt)

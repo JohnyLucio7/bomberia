@@ -41,14 +41,23 @@ class MCTSAgent(BaseAgent):
         my_pos = state.p1_pos if self.player_id == 1 else state.p2_pos
         opp_pos = state.p2_pos if self.player_id == 1 else state.p1_pos
         
-        # 1. FUGA ABSOLUTA: Se o tile atual é perigoso, foge pelo caminho MAIS SEGURO
+        # 1. FUGA IMEDIATA: Se o tile atual for perigoso, foge pelo caminho MAIS SEGURO
         if safety_map[my_pos[0]][my_pos[1]] == 1:
             best_escape = self._find_best_aggressive_safe_move(state, my_pos, opp_pos, safety_map)
             if best_escape: 
                 self.prev_move = best_escape
                 return best_escape
 
-        # 2. ESPERA INTELIGENTE: Se houver bomba/fogo por perto e eu estiver seguro, NÃO SE MEXE
+        # 2. REGRAS DE CERCAMENTO E INDEPENDÊNCIA
+        dist_to_opp = abs(my_pos[0] - opp_pos[0]) + abs(my_pos[1] - opp_pos[1])
+        has_bomb = not any(b[3] == self.player_id for b in state.bombs)
+        
+        # Se estamos MUITO próximos (raio 2), MANDATÓRIO soltar bomba
+        if dist_to_opp <= 2 and has_bomb:
+            if state.has_escape_route(my_pos[0], my_pos[1], self.player_id):
+                return "BOMB"
+
+        # Se já estamos seguros e há bombas por perto
         is_danger_near = False
         for br, bc, _, _ in state.bombs:
             if abs(my_pos[0]-br) + abs(my_pos[1]-bc) <= 3: is_danger_near = True; break
@@ -57,17 +66,23 @@ class MCTSAgent(BaseAgent):
                 if abs(my_pos[0]-er) + abs(my_pos[1]-ec) <= 2: is_danger_near = True; break
         
         if is_danger_near and safety_map[my_pos[0]][my_pos[1]] == 0:
-            # Nova Regra: Cercamento Obrigatório em proximidade
-            dist_to_opp = abs(my_pos[0] - opp_pos[0]) + abs(my_pos[1] - opp_pos[1])
-            if dist_to_opp <= 2:
-                has_bomb = not any(b[3] == self.player_id for b in state.bombs)
-                if has_bomb and state.has_escape_route(my_pos[0], my_pos[1]):
-                    return "BOMB"
+            # NOVO: Não podem se esconder no MESMO lugar.
+            # Se o oponente está no mesmo tile ou adjacente, eu devo procurar OUTRO tile seguro
+            if dist_to_opp <= 1:
+                # Tenta se mover para outro tile que também seja seguro
+                for mv, (dr, dc) in {"UP":(-1,0), "DOWN":(1,0), "LEFT":(0,-1), "RIGHT":(0,1)}.items():
+                    nr, nc = my_pos[0]+dr, my_pos[1]+dc
+                    if 0 <= nr < 8 and 0 <= nc < 8 and state.grid[nr][nc] == 0 and safety_map[nr][nc] == 0:
+                        # Verifica se esse movimento nos AFASTA do oponente
+                        new_dist = abs(nr - opp_pos[0]) + abs(nc - opp_pos[1])
+                        if new_dist > dist_to_opp:
+                            return mv
             
+            # Se não tiver pra onde ir sem se matar, ou já estiver longe o suficiente, fica parado.
             self.prev_move = "IDLE"
             return "IDLE"
 
-        # 3. MCTS para Ataque
+        # 3. MCTS para Estratégia
         root = MCTSNode(state=state, player_id=2 if self.player_id == 1 else 1)
         while time.perf_counter() - start_time < self.time_limit:
             node = root
@@ -97,8 +112,8 @@ class MCTSAgent(BaseAgent):
 
         if not root.children: return "IDLE"
         
-        # Filtro de Segurança e Inércia (evita jitter)
-        sorted_children = sorted(root.children, key=lambda c: (c.visits, c.move == self.prev_move, c.move == "BOMB"), reverse=True)
+        # Filtro final de estabilidade
+        sorted_children = sorted(root.children, key=lambda c: (c.visits, c.move == self.prev_move), reverse=True)
         for child in sorted_children:
             temp_s = state.clone()
             temp_s.apply_action(self.player_id, child.move)
@@ -106,51 +121,36 @@ class MCTSAgent(BaseAgent):
             if safety_map[new_p[0]][new_p[1]] == 0:
                 self.prev_move = child.move
                 return child.move
-        
-        self.prev_move = sorted_children[0].move
-        return self.prev_move
+        return "IDLE"
 
     def _find_best_aggressive_safe_move(self, state, start_pos, opp_pos, safety_map):
-        """BFS que encontra um caminho onde TODOS os steps são seguros (se possível)"""
         queue, visited = [(start_pos, [])], {start_pos}
-        best_move, min_dist_to_opp = None, 999
-        
+        best_move, min_dist = None, 999
         while queue:
             (r, c), path = queue.pop(0)
             if safety_map[r][c] == 0:
                 d = abs(r - opp_pos[0]) + abs(c - opp_pos[1])
-                if d < min_dist_to_opp:
-                    min_dist_to_opp = d
+                if d < min_dist:
+                    min_dist = d
                     best_move = path[0] if path else "IDLE"
-            
             for mv, (dr, dc) in {"UP":(-1,0), "DOWN":(1,0), "LEFT":(0,-1), "RIGHT":(0,1)}.items():
                 nr, nc = r+dr, c+dc
                 if 0 <= nr < 8 and 0 <= nc < 8 and state.grid[nr][nc] == 0 and (nr, nc) not in visited:
-                    # Só entra no tile se não houver bomba lá. 
-                    # Se estiver fugindo, permite passar por tiles de safety_map=1 temporariamente 
-                    # MAS prioriza os de safety_map=0 (o MCTS e a ordenação cuidam disso)
-                    is_bomb = any(b[0] == nr and b[1] == nc for b in state.bombs)
-                    if not is_bomb:
-                        visited.add((nr, nc))
-                        queue.append(((nr, nc), path + [mv]))
+                    if not any(b[0] == nr and b[1] == nc for b in state.bombs):
+                        visited.add((nr, nc)); queue.append(((nr, nc), path + [mv]))
         return best_move
 
     def evaluate_state(self, state, initial_pos):
         winner = state.check_winner()
         if winner == 1: return 1.0
         if winner == 2: return -1.0
-        
         p1r, p1c = state.p1_pos
         p2r, p2c = state.p2_pos
-        
-        # Morte (Penalidade absoluta)
         p1_h = any(e[0] == p1r and e[1] == p1c for e in state.explosions)
         p2_h = any(e[0] == p2r and e[1] == p2c for e in state.explosions)
         if p1_h: return -1.0
         if p2_h: return 1.0
-
-        # BUSCA DE CAMINHO REAL (BFS)
-        def get_path_dist(start, target):
+        def get_dist(start, target):
             q, v = [(start, 0)], {start}
             while q:
                 (r, c), d = q.pop(0)
@@ -160,8 +160,5 @@ class MCTSAgent(BaseAgent):
                     if 0 <= nr < 8 and 0 <= nc < 8 and state.grid[nr][nc] == 0 and (nr, nc) not in v:
                         v.add((nr, nc)); q.append(((nr, nc), d + 1))
             return 99
-
-        dist = get_path_dist(state.p1_pos, state.p2_pos)
-        score = (16 - dist) / 16.0 if dist < 99 else 0
-        
-        return score if self.player_id == 1 else -score
+        dist = get_dist(state.p1_pos, state.p2_pos)
+        return (16 - dist) / 25.0 if dist < 99 else 0

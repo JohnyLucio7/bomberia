@@ -46,7 +46,7 @@ class Player:
         c = int((center_x - offset_x) // tile_size) - 1
         return (max(0, min(7, r)), max(0, min(7, c)))
 
-    def update(self, dt, game_map, offset_x, offset_y, bombs=[], action=None):
+    def update(self, dt, game_map, offset_x, offset_y, bombs=[], action=None, other_player=None):
         if self.is_dead:
             if not self.death_finished:
                 self.anim_timer += dt
@@ -87,7 +87,7 @@ class Player:
                 # Check collision for the target tile
                 if not self._check_collision(new_target_x + (p_size - col_width)/2, 
                                            new_target_y + (p_size - col_height), 
-                                           col_width, col_height, game_map, offset_x, offset_y, bombs):
+                                           col_width, col_height, game_map, offset_x, offset_y, bombs, other_player):
                     self.target_x = new_target_x
                     self.target_y = new_target_y
             else:
@@ -107,8 +107,22 @@ class Player:
                 self.anim_timer = 0
                 self.frame_index = (self.frame_index + 1) % len(self.animations[self.current_anim])
 
-    def _check_collision(self, x, y, width, height, game_map, offset_x, offset_y, bombs=[]):
+    def _check_collision(self, x, y, width, height, game_map, offset_x, offset_y, bombs=[], other_player=None):
         player_rect = pygame.Rect(x, y, width, height)
+        
+        # Colisão com outro jogador (Body Blocking)
+        if other_player and not other_player.is_dead:
+            p_size = self.tile_size * self.scale
+            # Usamos a mesma bounding box proporcional para o outro player
+            other_col_width = p_size * 0.6
+            other_col_height = p_size * 0.4
+            other_rect = pygame.Rect(other_player.x + (p_size - other_col_width)/2, 
+                                   other_player.y + (p_size - other_col_height), 
+                                   other_col_width, other_col_height)
+            if player_rect.colliderect(other_rect):
+                return True
+
+        # Colisão com Bombas
         for bomb in bombs:
             if self not in bomb.players_inside:
                 bomb_rect = pygame.Rect(bomb.x, bomb.y, self.tile_size * self.scale, self.tile_size * self.scale)
