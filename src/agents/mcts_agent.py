@@ -39,12 +39,17 @@ class MCTSAgent(BaseAgent):
         safety_map = state.get_safety_map()
         my_pos = state.p1_pos if self.player_id == 1 else state.p2_pos
         
-        # 1. Fuga Instantânea se estiver em perigo
+        # 1. SEGURANÇA MÁXIMA: Se estiver em perigo, foge direto (BFS)
         if safety_map[my_pos[0]][my_pos[1]] == 1:
             best_escape = self._find_nearest_safe_tile_move(state, my_pos, safety_map)
             if best_escape: return best_escape
 
-        # 2. MCTS
+        # 2. PACIÊNCIA ABSOLUTA: Se houver bombas/fogo e eu já estiver seguro, FICAR PARADO.
+        has_danger = len(state.bombs) > 0 or len(state.explosions) > 0
+        if has_danger and safety_map[my_pos[0]][my_pos[1]] == 0:
+            return "IDLE"
+
+        # 3. MCTS para decidir entre explodir bloco ou caçar inimigo
         root = MCTSNode(state=state, player_id=2 if self.player_id == 1 else 1)
         while time.perf_counter() - start_time < self.time_limit:
             node = root
@@ -60,7 +65,7 @@ class MCTSAgent(BaseAgent):
                 node = node.add_child(m, state_sim.clone())
             
             # Rollout
-            for _ in range(8):
+            for _ in range(6):
                 winner = state_sim.check_winner()
                 if winner is not None: break
                 state_sim.apply_action(1, random.choice(state_sim.get_possible_actions(1)))
@@ -75,6 +80,8 @@ class MCTSAgent(BaseAgent):
                 curr = curr.parent
 
         if not root.children: return "IDLE"
+        
+        # Escolha final com filtro de segurança
         sorted_children = sorted(root.children, key=lambda c: c.visits, reverse=True)
         for child in sorted_children:
             temp_s = state.clone()
@@ -89,38 +96,58 @@ class MCTSAgent(BaseAgent):
         visited = {start_pos}
         while queue:
             (r, c), path = queue.pop(0)
-            if safety_map[r][c] == 0:
-                return path[0] if path else "IDLE"
+            if safety_map[r][c] == 0: return path[0] if path else "IDLE"
             for mv, (dr, dc) in {"UP":(-1,0), "DOWN":(1,0), "LEFT":(0,-1), "RIGHT":(0,1)}.items():
                 nr, nc = r+dr, c+dc
                 if 0 <= nr < 8 and 0 <= nc < 8 and state.grid[nr][nc] == 0 and (nr, nc) not in visited:
-                    is_bomb = any(b[0] == nr and b[1] == nc for b in state.bombs)
-                    if not is_bomb:
-                        visited.add((nr, nc))
-                        queue.append(((nr, nc), path + [mv]))
+                    if not any(b[0] == nr and b[1] == nc for b in state.bombs):
+                        visited.add((nr, nc)); queue.append(((nr, nc), path + [mv]))
         return None
 
     def evaluate_state(self, state):
         winner = state.check_winner()
         if winner == 1: return 1.0
         if winner == 2: return -1.0
+        
         p1r, p1c = state.p1_pos
         p2r, p2c = state.p2_pos
         
-        # Sobrevivência
+        # Sobrevivência (Penalidade por fogo)
         p1_h = any(e[0] == p1r and e[1] == p1c for e in state.explosions)
         p2_h = any(e[0] == p2r and e[1] == p2c for e in state.explosions)
-        if p1_h: return -0.95
-        if p2_h: return 0.95
+        if p1_h: return -0.99
+        if p2_h: return 0.99
 
-        # Heurística base
-        dist = abs(p1r - p2r) + abs(p1c - p2c)
-        score = (16 - dist) / 100.0
+        # ESTRATÉGIA:
+        # Se existe caminho livre até o inimigo -> Caçar inimigo
+        # Se não existe -> Caçar bloco mais próximo
+        def get_dist_to_target(start, target_type, s):
+            q = [(start, 0)]
+            v = {start}
+            while q:
+                (r, c), d = q.pop(0)
+                if target_type == "OPP":
+                    opp = s.p2_pos if self.player_id == 1 else s.p1_pos
+                    if r == opp[0] and c == opp[1]: return d
+                elif target_type == "BLOCK":
+                    for dr, dc in [(0,1),(0,-1),(1,0),(-1,0)]:
+                        nr, nc = r+dr, c+dc
+                        if 0 <= nr < 8 and 0 <= nc < 8 and s.grid[nr][nc] == 2: return d
+                
+                for dr, dc in [(0,1),(0,-1),(1,0),(-1,0)]:
+                    nr, nc = r+dr, c+dc
+                    if 0 <= nr < 8 and 0 <= nc < 8 and s.grid[nr][nc] == 0 and (nr, nc) not in v:
+                        v.add((nr, nc)); q.append(((nr, nc), d + 1))
+            return 99
+
+        p1_to_p2 = get_dist_to_target(state.p1_pos, "OPP", state)
+        p1_to_block = get_dist_to_target(state.p1_pos, "BLOCK", state)
+        p2_to_p1 = get_dist_to_target(state.p2_pos, "OPP", state)
+        p2_to_block = get_dist_to_target(state.p2_pos, "BLOCK", state)
+
+        # Pontuação P1
+        score1 = (16 - p1_to_p2) / 20.0 if p1_to_p2 < 99 else (16 - p1_to_block) / 40.0
+        # Pontuação P2
+        score2 = (16 - p2_to_p1) / 20.0 if p2_to_p1 < 99 else (16 - p2_to_block) / 40.0
         
-        # PACIÊNCIA: Se houver perigo, ficar seguro e parado é lucro
-        if len(state.bombs) > 0 or len(state.explosions) > 0:
-            s_map = state.get_safety_map()
-            if s_map[p1r][p1c] == 0: score += 0.5
-            if s_map[p2r][p2c] == 0: score -= 0.5
-            
-        return score
+        return score1 - score2
