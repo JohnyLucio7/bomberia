@@ -46,6 +46,10 @@ class Game:
 
         keys = pygame.key.get_pressed()
         if keys[pygame.K_SPACE]:
+            # Limitar a apenas uma bomba por vez
+            if len(self.bombs) >= 1:
+                return
+
             # Calcular posição da bomba no grid de forma mais precisa
             # Centralizamos a detecção no meio do player (32x32 offset se player é 64x64)
             player_center_x = self.player.x + (self.player.tile_size * self.player.scale) // 2
