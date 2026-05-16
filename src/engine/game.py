@@ -76,7 +76,7 @@ class Game:
         if self.game_over:
             return
 
-        self.player.update(dt, self.map, self.offset_x, self.offset_y)
+        self.player.update(dt, self.map, self.offset_x, self.offset_y, self.bombs)
         
         # Update bombas
         for bomb in self.bombs[:]:

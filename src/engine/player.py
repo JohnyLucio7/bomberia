@@ -36,7 +36,7 @@ class Player:
         image = self.ss.get_image(x, y, 16, 16)
         return pygame.transform.scale(image, (16 * self.scale, 16 * self.scale))
 
-    def update(self, dt, game_map, offset_x, offset_y):
+    def update(self, dt, game_map, offset_x, offset_y, bombs=[]):
         if self.is_dead:
             if not self.death_finished:
                 self.anim_timer += dt
@@ -52,6 +52,21 @@ class Player:
         self.direction = pygame.Vector2(0, 0)
         self.is_moving = False
         
+        # Tamanho real do player na tela
+        p_size = self.tile_size * self.scale # 64
+        # Bounding box reduzida para colisão (mais permissiva, centralizada nos pés)
+        col_width = p_size * 0.6
+        col_height = p_size * 0.4
+        
+        # Atualizar estado player_inside das bombas ANTES de mover
+        player_rect = pygame.Rect(self.x + (p_size - col_width)/2, self.y + (p_size - col_height), 
+                                col_width, col_height)
+        for bomb in bombs:
+            if bomb.player_inside:
+                bomb_rect = pygame.Rect(bomb.x, bomb.y, 16 * bomb.scale, 16 * bomb.scale)
+                if not player_rect.colliderect(bomb_rect):
+                    bomb.player_inside = False
+
         if keys[pygame.K_LEFT]:
             self.direction.x = -1
             self.current_anim = "run_left"
@@ -70,23 +85,16 @@ class Player:
             self.is_moving = True
             
         if self.is_moving:
-            # Tamanho real do player na tela
-            p_size = self.tile_size * self.scale # 64
-            # Bounding box reduzida para colisão (mais permissiva, centralizada nos pés)
-            # Bombermans geralmente têm colisão menor que o sprite para facilitar navegação
-            col_width = p_size * 0.6
-            col_height = p_size * 0.4
-            
             # Movimento X com colisão
             new_x = self.x + self.direction.x * self.speed
             if not self._check_collision(new_x + (p_size - col_width)/2, self.y + (p_size - col_height), 
-                                       col_width, col_height, game_map, offset_x, offset_y):
+                                       col_width, col_height, game_map, offset_x, offset_y, bombs):
                 self.x = new_x
 
             # Movimento Y com colisão
             new_y = self.y + self.direction.y * self.speed
             if not self._check_collision(self.x + (p_size - col_width)/2, new_y + (p_size - col_height), 
-                                       col_width, col_height, game_map, offset_x, offset_y):
+                                       col_width, col_height, game_map, offset_x, offset_y, bombs):
                 self.y = new_y
             
             self.anim_timer += dt
@@ -96,10 +104,17 @@ class Player:
         else:
             self.frame_index = 0
 
-    def _check_collision(self, x, y, width, height, game_map, offset_x, offset_y):
+    def _check_collision(self, x, y, width, height, game_map, offset_x, offset_y, bombs=[]):
         # Retângulo de colisão do player
         player_rect = pygame.Rect(x, y, width, height)
         
+        # Colisão com Bombas
+        for bomb in bombs:
+            if not bomb.player_inside:
+                bomb_rect = pygame.Rect(bomb.x, bomb.y, 16 * bomb.scale, 16 * bomb.scale)
+                if player_rect.colliderect(bomb_rect):
+                    return True
+
         # Verificar apenas tiles próximos para performance
         # Converter coordenadas de tela para grid
         tile_size = game_map.display_tile_size
