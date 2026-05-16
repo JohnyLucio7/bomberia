@@ -39,17 +39,26 @@ class MCTSAgent(BaseAgent):
         safety_map = state.get_safety_map()
         my_pos = state.p1_pos if self.player_id == 1 else state.p2_pos
         
-        # 1. SEGURANÇA MÁXIMA: Se estiver em perigo, foge direto (BFS)
+        # 1. FUGA IMEDIATA: Só foge se o tile atual for PERIGOSO
         if safety_map[my_pos[0]][my_pos[1]] == 1:
             best_escape = self._find_nearest_safe_tile_move(state, my_pos, safety_map)
             if best_escape: return best_escape
 
-        # 2. PACIÊNCIA ABSOLUTA: Se houver bombas/fogo e eu já estiver seguro, FICAR PARADO.
-        has_danger = len(state.bombs) > 0 or len(state.explosions) > 0
-        if has_danger and safety_map[my_pos[0]][my_pos[1]] == 0:
+        # 2. PACIÊNCIA LOCALIZADA: Só fica parado se estiver seguro E houver bomba PERTO (raio 3)
+        # Isso impede que uma bomba do outro lado do mapa trave o bot.
+        is_danger_near = False
+        for br, bc, _, _ in state.bombs:
+            if abs(my_pos[0] - br) + abs(my_pos[1] - bc) <= 3:
+                is_danger_near = True; break
+        if not is_danger_near:
+            for er, ec, _ in state.explosions:
+                if abs(my_pos[0] - er) + abs(my_pos[1] - ec) <= 2:
+                    is_danger_near = True; break
+        
+        if is_danger_near and safety_map[my_pos[0]][my_pos[1]] == 0:
             return "IDLE"
 
-        # 3. MCTS para decidir entre explodir bloco ou caçar inimigo
+        # 3. MCTS para Estratégia Independente
         root = MCTSNode(state=state, player_id=2 if self.player_id == 1 else 1)
         while time.perf_counter() - start_time < self.time_limit:
             node = root
@@ -81,8 +90,8 @@ class MCTSAgent(BaseAgent):
 
         if not root.children: return "IDLE"
         
-        # Escolha final com filtro de segurança
-        sorted_children = sorted(root.children, key=lambda c: c.visits, reverse=True)
+        # Filtro final de segurança (Não entrar em fogo)
+        sorted_children = sorted(root.children, key=lambda c: (c.visits, c.move == "IDLE"), reverse=True)
         for child in sorted_children:
             temp_s = state.clone()
             temp_s.apply_action(self.player_id, child.move)
@@ -112,42 +121,44 @@ class MCTSAgent(BaseAgent):
         p1r, p1c = state.p1_pos
         p2r, p2c = state.p2_pos
         
-        # Sobrevivência (Penalidade por fogo)
+        # Sobrevivência
         p1_h = any(e[0] == p1r and e[1] == p1c for e in state.explosions)
         p2_h = any(e[0] == p2r and e[1] == p2c for e in state.explosions)
         if p1_h: return -0.99
         if p2_h: return 0.99
 
-        # ESTRATÉGIA:
-        # Se existe caminho livre até o inimigo -> Caçar inimigo
-        # Se não existe -> Caçar bloco mais próximo
-        def get_dist_to_target(start, target_type, s):
-            q = [(start, 0)]
-            v = {start}
+        # BUSCA DE ALVO (BFS):
+        def get_dist(start, target_pos, s):
+            q, v = [(start, 0)], {start}
             while q:
                 (r, c), d = q.pop(0)
-                if target_type == "OPP":
-                    opp = s.p2_pos if self.player_id == 1 else s.p1_pos
-                    if r == opp[0] and c == opp[1]: return d
-                elif target_type == "BLOCK":
-                    for dr, dc in [(0,1),(0,-1),(1,0),(-1,0)]:
-                        nr, nc = r+dr, c+dc
-                        if 0 <= nr < 8 and 0 <= nc < 8 and s.grid[nr][nc] == 2: return d
-                
+                if r == target_pos[0] and c == target_pos[1]: return d
                 for dr, dc in [(0,1),(0,-1),(1,0),(-1,0)]:
                     nr, nc = r+dr, c+dc
                     if 0 <= nr < 8 and 0 <= nc < 8 and s.grid[nr][nc] == 0 and (nr, nc) not in v:
                         v.add((nr, nc)); q.append(((nr, nc), d + 1))
             return 99
 
-        p1_to_p2 = get_dist_to_target(state.p1_pos, "OPP", state)
-        p1_to_block = get_dist_to_target(state.p1_pos, "BLOCK", state)
-        p2_to_p1 = get_dist_to_target(state.p2_pos, "OPP", state)
-        p2_to_block = get_dist_to_target(state.p2_pos, "BLOCK", state)
+        def get_dist_to_nearest_block(start, s):
+            q, v = [(start, 0)], {start}
+            while q:
+                (r, c), d = q.pop(0)
+                for dr, dc in [(0,1),(0,-1),(1,0),(-1,0)]:
+                    nr, nc = r+dr, c+dc
+                    if 0 <= nr < 8 and 0 <= nc < 8:
+                        if s.grid[nr][nc] == 2: return d
+                        if s.grid[nr][nc] == 0 and (nr, nc) not in v:
+                            v.add((nr, nc)); q.append(((nr, nc), d + 1))
+            return 99
 
-        # Pontuação P1
-        score1 = (16 - p1_to_p2) / 20.0 if p1_to_p2 < 99 else (16 - p1_to_block) / 40.0
-        # Pontuação P2
-        score2 = (16 - p2_to_p1) / 20.0 if p2_to_p1 < 99 else (16 - p2_to_block) / 40.0
+        # P1 Progress
+        p1_to_p2 = get_dist(state.p1_pos, state.p2_pos, state)
+        if p1_to_p2 < 99: score1 = (16 - p1_to_p2) / 20.0
+        else: score1 = (16 - get_dist_to_nearest_block(state.p1_pos, state)) / 40.0
+
+        # P2 Progress
+        p2_to_p1 = get_dist(state.p2_pos, state.p1_pos, state)
+        if p2_to_p1 < 99: score2 = (16 - p2_to_p1) / 20.0
+        else: score2 = (16 - get_dist_to_nearest_block(state.p2_pos, state)) / 40.0
         
         return score1 - score2
