@@ -19,7 +19,8 @@ class Player:
             "run_left":  [self._get_frame(0, 0), self._get_frame(16, 0), self._get_frame(32, 0)],
             "run_down":  [self._get_frame(48, 0), self._get_frame(64, 0), self._get_frame(80, 0)],
             "run_right": [self._get_frame(0, 16), self._get_frame(16, 16), self._get_frame(32, 16)],
-            "run_up":    [self._get_frame(48, 16), self._get_frame(64, 16), self._get_frame(80, 16)]
+            "run_up":    [self._get_frame(48, 16), self._get_frame(64, 16), self._get_frame(80, 16)],
+            "death":     [self._get_frame(x * 16, 32) for x in range(7)]
         }
 
         self.current_anim = "run_down"
@@ -27,6 +28,8 @@ class Player:
         self.anim_speed = 0.15
         self.anim_timer = 0
         self.is_moving = False
+        self.is_dead = False
+        self.death_finished = False
         self.direction = pygame.Vector2(0, 0)
 
     def _get_frame(self, x, y):
@@ -34,6 +37,17 @@ class Player:
         return pygame.transform.scale(image, (16 * self.scale, 16 * self.scale))
 
     def update(self, dt, game_map, offset_x, offset_y):
+        if self.is_dead:
+            if not self.death_finished:
+                self.anim_timer += dt
+                if self.anim_timer >= self.anim_speed:
+                    self.anim_timer = 0
+                    if self.frame_index < len(self.animations["death"]) - 1:
+                        self.frame_index += 1
+                    else:
+                        self.death_finished = True
+            return
+
         keys = pygame.key.get_pressed()
         self.direction = pygame.Vector2(0, 0)
         self.is_moving = False
