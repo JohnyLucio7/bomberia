@@ -8,8 +8,8 @@ class Map:
         self.scale = 4
         self.display_tile_size = self.tile_size * self.scale
 
-        # Tabuleiro 8x8 + Borda de 1 tile = 10x10
-        self.grid_size = 8
+        # Tamanho dinâmico do grid jogável + borda externa
+        self.grid_size = 8 # Acima de 10x10 a visualização da janela precisa ser ajustada
         self.total_size = self.grid_size + 2
 
         self.ss = SpriteSheet(spritesheet_path)
@@ -25,7 +25,6 @@ class Map:
 
     def _setup_initial_map(self):
         # Paredes fixas (padrão bomberman: intercaladas)
-        # Em grid 8x8, vamos usar range(1, 7, 2) para garantir que as extremidades (0 e 7) fiquem livres
         for row in range(1, self.grid_size - 1, 2):
             for col in range(1, self.grid_size - 1, 2):
                 self.grid[row][col] = 1
@@ -36,7 +35,7 @@ class Map:
             for col in range(self.grid_size):
                 if self.grid[row][col] == 0:
                     # Não colocar blocos nos cantos (spawn dos players)
-                    if (row < 2 and col < 2) or (row > 5 and col > 5):
+                    if (row < 2 and col < 2) or (row > self.grid_size - 3 and col > self.grid_size - 3):
                         continue
                     if random.random() < 0.7: # 70% de chance de bloco
                         self.grid[row][col] = 2

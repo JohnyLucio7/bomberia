@@ -44,7 +44,7 @@ class Player:
         center_y = self.y + (self.tile_size * self.scale) // 2
         r = int((center_y - offset_y) // tile_size) - 1
         c = int((center_x - offset_x) // tile_size) - 1
-        return (max(0, min(7, r)), max(0, min(7, c)))
+        return (max(0, r), max(0, c))
 
     def update(self, dt, game_map, offset_x, offset_y, bombs=[], action=None, other_player=None):
         if self.is_dead:

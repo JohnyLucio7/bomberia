@@ -25,8 +25,8 @@ class Game:
             self.spritesheet_path
         )
         self.player2 = Player(
-            self.offset_x + self.map.display_tile_size * 8, 
-            self.offset_y + self.map.display_tile_size * 8, 
+            self.offset_x + self.map.display_tile_size * (self.map.grid_size - 1), 
+            self.offset_y + self.map.display_tile_size * (self.map.grid_size - 1), 
             self.spritesheet_path,
             tint_color=(100, 100, 255)
         )
@@ -46,8 +46,8 @@ class Game:
             self.spritesheet_path
         )
         self.player2 = Player(
-            self.offset_x + self.map.display_tile_size * 8, 
-            self.offset_y + self.map.display_tile_size * 8, 
+            self.offset_x + self.map.display_tile_size * (self.map.grid_size - 1), 
+            self.offset_y + self.map.display_tile_size * (self.map.grid_size - 1), 
             self.spritesheet_path,
             tint_color=(100, 100, 255)
         )
