@@ -30,7 +30,7 @@ class MCTSNode:
         self.wins += result
 
 class MCTSAgent(BaseAgent):
-    def __init__(self, player_id, time_limit=0.015):
+    def __init__(self, player_id, time_limit=0.5):
         super().__init__(player_id)
         self.time_limit = time_limit
         self.prev_move = "IDLE"
@@ -50,10 +50,10 @@ class MCTSAgent(BaseAgent):
 
         # 2. REGRAS DE CERCAMENTO E INDEPENDÊNCIA
         dist_to_opp = abs(my_pos[0] - opp_pos[0]) + abs(my_pos[1] - opp_pos[1])
-        has_bomb = not any(b[3] == self.player_id for b in state.bombs)
+        can_place_bomb = not any(b[3] == self.player_id for b in state.bombs)
         
         # Se estamos MUITO próximos (raio 2), MANDATÓRIO soltar bomba
-        if dist_to_opp <= 2 and has_bomb:
+        if dist_to_opp <= 2 and can_place_bomb:
             if state.has_escape_route(my_pos[0], my_pos[1], self.player_id):
                 return "BOMB"
 
@@ -72,7 +72,7 @@ class MCTSAgent(BaseAgent):
                 # Tenta se mover para outro tile que também seja seguro
                 for mv, (dr, dc) in {"UP":(-1,0), "DOWN":(1,0), "LEFT":(0,-1), "RIGHT":(0,1)}.items():
                     nr, nc = my_pos[0]+dr, my_pos[1]+dc
-                    if 0 <= nr < 8 and 0 <= nc < 8 and state.grid[nr][nc] == 0 and safety_map[nr][nc] == 0:
+                    if 0 <= nr < state.rows and 0 <= nc < state.cols and state.grid[nr][nc] == 0 and safety_map[nr][nc] == 0:
                         # Verifica se esse movimento nos AFASTA do oponente
                         new_dist = abs(nr - opp_pos[0]) + abs(nc - opp_pos[1])
                         if new_dist > dist_to_opp:
@@ -103,10 +103,10 @@ class MCTSAgent(BaseAgent):
                 state_sim.apply_action(2, random.choice(state_sim.get_possible_actions(2)))
                 state_sim.step_time(0.5)
             
-            result = self.evaluate_state(state_sim, my_pos)
+            result = self.evaluate_state(state_sim)
             curr = node
             while curr is not None:
-                reward = result if curr.player_id == 1 else -result
+                reward = result if curr.player_id == self.player_id else -result
                 curr.update(reward)
                 curr = curr.parent
 
@@ -135,21 +135,24 @@ class MCTSAgent(BaseAgent):
                     best_move = path[0] if path else "IDLE"
             for mv, (dr, dc) in {"UP":(-1,0), "DOWN":(1,0), "LEFT":(0,-1), "RIGHT":(0,1)}.items():
                 nr, nc = r+dr, c+dc
-                if 0 <= nr < 8 and 0 <= nc < 8 and state.grid[nr][nc] == 0 and (nr, nc) not in visited:
+                if 0 <= nr < state.rows and 0 <= nc < state.cols and state.grid[nr][nc] == 0 and (nr, nc) not in visited:
                     if not any(b[0] == nr and b[1] == nc for b in state.bombs):
                         visited.add((nr, nc)); queue.append(((nr, nc), path + [mv]))
         return best_move
 
-    def evaluate_state(self, state, initial_pos):
+    def evaluate_state(self, state):
         winner = state.check_winner()
-        if winner == 1: return 1.0
-        if winner == 2: return -1.0
-        p1r, p1c = state.p1_pos
-        p2r, p2c = state.p2_pos
-        p1_h = any(e[0] == p1r and e[1] == p1c for e in state.explosions)
-        p2_h = any(e[0] == p2r and e[1] == p2c for e in state.explosions)
-        if p1_h: return -1.0
-        if p2_h: return 1.0
+        if winner == self.player_id: return 1.0
+        if winner == "DRAW": return 0.0
+        if winner is not None: return -1.0
+        my_pos = state.p1_pos if self.player_id == 1 else state.p2_pos
+        opp_pos = state.p2_pos if self.player_id == 1 else state.p1_pos
+        my_r, my_c = my_pos
+        opp_r, opp_c = opp_pos
+        my_hit = any(e[0] == my_r and e[1] == my_c for e in state.explosions)
+        opp_hit = any(e[0] == opp_r and e[1] == opp_c for e in state.explosions)
+        if my_hit: return -1.0
+        if opp_hit: return 1.0
         def get_dist(start, target):
             q, v = [(start, 0)], {start}
             while q:
@@ -157,8 +160,8 @@ class MCTSAgent(BaseAgent):
                 if r == target[0] and c == target[1]: return d
                 for dr, dc in [(0,1),(0,-1),(1,0),(-1,0)]:
                     nr, nc = r+dr, c+dc
-                    if 0 <= nr < 8 and 0 <= nc < 8 and state.grid[nr][nc] == 0 and (nr, nc) not in v:
+                    if 0 <= nr < state.rows and 0 <= nc < state.cols and state.grid[nr][nc] == 0 and (nr, nc) not in v:
                         v.add((nr, nc)); q.append(((nr, nc), d + 1))
             return 99
-        dist = get_dist(state.p1_pos, state.p2_pos)
+        dist = get_dist(my_pos, opp_pos)
         return (16 - dist) / 25.0 if dist < 99 else 0

@@ -1,6 +1,8 @@
 class SimulatedState:
     def __init__(self, grid, p1_pos, p2_pos, bombs=None, explosions=None):
         self.grid = [row[:] for row in grid]
+        self.rows = len(self.grid)
+        self.cols = len(self.grid[0])
         self.p1_pos = p1_pos 
         self.p2_pos = p2_pos 
         self.bombs = [list(b) for b in bombs] if bombs else []
@@ -10,7 +12,7 @@ class SimulatedState:
         return SimulatedState(self.grid, self.p1_pos, self.p2_pos, self.bombs, self.explosions)
 
     def is_valid_pos(self, r, c, player_id=None, ignore_bombs=False):
-        if not (0 <= r < 8 and 0 <= c < 8): return False
+        if not (0 <= r < self.rows and 0 <= c < self.cols): return False
         if self.grid[r][c] in [1, 2]: return False
         
         # Body Blocking: O outro jogador é um obstáculo
@@ -41,7 +43,7 @@ class SimulatedState:
         for dr, dc in [(0,1),(0,-1),(1,0),(-1,0)]:
             for dist in range(1, 3):
                 nr, nc = r + dr * dist, c + dc * dist
-                if 0 <= nr < 8 and 0 <= nc < 8:
+                if 0 <= nr < self.rows and 0 <= nc < self.cols:
                     if nr == opp[0] and nc == opp[1]: return True
                     if self.grid[nr][nc] == 2: return True
                     if self.grid[nr][nc] == 1: break 
@@ -58,7 +60,7 @@ class SimulatedState:
             if s_map[cr][cc] == 0: return True
             for dr, dc in [(0,1),(0,-1),(1,0),(-1,0)]:
                 nr, nc = cr+dr, cc+dc
-                if 0 <= nr < 8 and 0 <= nc < 8 and self.grid[nr][nc] == 0:
+                if 0 <= nr < self.rows and 0 <= nc < self.cols and self.grid[nr][nc] == 0:
                     if nr == opp_pos[0] and nc == opp_pos[1]: continue # Body block
                     is_b = any(b[0] == nr and b[1] == nc for b in self.bombs)
                     if not is_b and (nr, nc) not in v:
@@ -69,15 +71,15 @@ class SimulatedState:
         return self._calculate_safety_map(self.bombs)
 
     def _calculate_safety_map(self, bombs_to_check):
-        s_map = [[0 for _ in range(8)] for _ in range(8)]
+        s_map = [[0 for _ in range(self.cols)] for _ in range(self.rows)]
         for er, ec, _ in self.explosions:
-            if 0 <= er < 8 and 0 <= ec < 8: s_map[er][ec] = 1
+            if 0 <= er < self.rows and 0 <= ec < self.cols: s_map[er][ec] = 1
         for br, bc, _, _ in bombs_to_check:
             s_map[br][bc] = 1
             for dr, dc in [(0,1),(0,-1),(1,0),(-1,0)]:
                 for dist in range(1, 3):
                     nr, nc = br + dr * dist, bc + dc * dist
-                    if 0 <= nr < 8 and 0 <= nc < 8:
+                    if 0 <= nr < self.rows and 0 <= nc < self.cols:
                         if self.grid[nr][nc] != 0: break
                         s_map[nr][nc] = 1
                     else: break
@@ -117,7 +119,7 @@ class SimulatedState:
         for dr, dc in [(0,1),(0,-1),(1,0),(-1,0)]:
             for dist in range(1, 3):
                 nr, nc = r + dr * dist, c + dc * dist
-                if 0 <= nr < 8 and 0 <= nc < 8:
+                if 0 <= nr < self.rows and 0 <= nc < self.cols:
                     if self.grid[nr][nc] == 1: break
                     if self.grid[nr][nc] == 2:
                         self.grid[nr][nc] = 0

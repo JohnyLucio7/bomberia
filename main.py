@@ -3,6 +3,7 @@ import sys
 from src.engine.game import Game
 from src.engine.menu import MainMenu
 from src.agents.mcts_agent import MCTSAgent
+from src.agents.minimax_agent import MinimaxAgent
 
 def main():
     pygame.init()
@@ -31,7 +32,7 @@ def main():
                 # Inicializar jogo com base no modo
                 if mode == "SMOOTH":
                     game = Game(screen, mode="SMOOTH", 
-                               agent1=MCTSAgent(1), agent2=MCTSAgent(2))
+                               agent1=MCTSAgent(1, time_limit=0.03), agent2=MinimaxAgent(2, depth=1))
                 elif mode == "STEP":
                     game = Game(screen, mode="STEP", 
                                agent1=MCTSAgent(1), agent2=MCTSAgent(2))
