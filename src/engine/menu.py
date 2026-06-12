@@ -10,7 +10,9 @@ class MainMenu:
         self.options = [
             {"label": "1. Smooth Mode (AI vs AI)", "mode": "SMOOTH"},
             {"label": "2. Step-by-Step Mode (AI vs AI)", "mode": "STEP"},
-            {"label": "3. Human vs AI (Smooth)", "mode": "HUMAN_VS_AI"}
+            {"label": "3. Human vs AI (Smooth)", "mode": "HUMAN_VS_AI"},
+            {"label": "4. Tournament (batch headless)", "mode": "TOURNAMENT"},
+            {"label": "5. Stats / Graphs", "mode": "STATS"}
         ]
         self.selected_index = 0
 
