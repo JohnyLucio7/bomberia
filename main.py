@@ -1,12 +1,37 @@
 import pygame
 import sys
 from src.engine.game import Game
-from src.engine.menu import MainMenu
+from src.engine.menu import MainMenu, AgentSelectMenu
 from src.engine.tournament import run_tournament
 from src.agents.mcts_agent import MCTSAgent
 from src.agents.minimax_agent import MinimaxAgent
 from src.stats.aggregate import build_report
 from src.stats import plots
+
+
+_AI_ROWS = [
+    {"label": "Game Mode", "options": ["Smooth", "Step-by-Step"], "key": "mode"},
+    {"label": "Player 1",  "options": ["MCTS", "Minimax"],        "key": "agent1_key"},
+    {"label": "Player 2",  "options": ["MCTS", "Minimax"],        "key": "agent2_key"},
+]
+_HUMAN_ROWS = [
+    {"label": "Game Mode", "options": ["Smooth", "Step-by-Step"], "key": "mode"},
+    {"label": "Opponent",  "options": ["MCTS", "Minimax"],        "key": "agent2_key"},
+]
+
+
+def _make_agents(config):
+    def _build(key, player_id):
+        v = config.get(key, "Human")
+        if v == "MCTS":    return MCTSAgent(player_id, time_limit=0.3)
+        if v == "Minimax": return MinimaxAgent(player_id, depth=2)
+        return None
+    mode_label = config.get("mode", "Smooth")
+    mode  = "SMOOTH" if mode_label == "Smooth" else "STEP"
+    a1    = _build("agent1_key", 1)
+    a2    = _build("agent2_key", 2)
+    names = (config.get("agent1_key", "Human"), config.get("agent2_key", "Human"))
+    return a1, a2, names, mode
 
 
 def _ask_int(prompt, default):
@@ -59,8 +84,9 @@ def main():
     pygame.display.set_caption("Bomberia AI Testbed")
     clock = pygame.time.Clock()
 
-    menu = MainMenu(screen)
-    game = None
+    menu       = MainMenu(screen)
+    agent_menu = None
+    game       = None
 
     state = "MENU"
 
@@ -75,28 +101,36 @@ def main():
             elif mode == "STATS":
                 run_stats_flow()
             elif mode:
-                # Inicializar jogo com base no modo
                 if mode == "SMOOTH":
-                    game = Game(screen, mode="SMOOTH",
-                                agent1=MCTSAgent(1, time_limit=0.03), agent2=MinimaxAgent(2, depth=1),
-                                agent_names=("MCTS", "Minimax"), record=True, source="interactive")
+                    agent_menu = AgentSelectMenu(screen, _AI_ROWS, defaults=[0, 0, 1])
                 elif mode == "STEP":
-                    game = Game(screen, mode="STEP",
-                                agent1=MCTSAgent(1), agent2=MCTSAgent(2))
+                    agent_menu = AgentSelectMenu(screen, _AI_ROWS, defaults=[1, 0, 0])
                 elif mode == "HUMAN_VS_AI":
-                    game = Game(screen, mode="SMOOTH",
-                                agent1=None, agent2=MCTSAgent(2),
-                                agent_names=("Human", "MCTS"), record=True, source="interactive")
-                state = "GAME"
+                    agent_menu = AgentSelectMenu(screen, _HUMAN_ROWS, defaults=[0, 0])
+                state = "AGENT_SELECT"
 
             menu.draw()
+            pygame.display.flip()
+
+        elif state == "AGENT_SELECT":
+            result = agent_menu.handle_input()
+            if result == "QUIT":
+                running = False
+            elif result == "BACK":
+                state = "MENU"
+            elif result is not None:
+                a1, a2, names, game_mode = _make_agents(result)
+                game = Game(screen, mode=game_mode, agent1=a1, agent2=a2,
+                            agent_names=names, record=True, source="interactive")
+                state = "GAME"
+
+            agent_menu.draw()
             pygame.display.flip()
 
         elif state == "GAME":
             for event in pygame.event.get(pygame.QUIT):
                 running = False
 
-            # Atalho para voltar ao menu
             keys = pygame.key.get_pressed()
             if keys[pygame.K_ESCAPE]:
                 state = "MENU"
