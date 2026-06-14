@@ -53,41 +53,53 @@ class AgentSelectMenu:
         self.rows = rows
         self.width, self.height = screen.get_size()
         self.font_title  = pygame.font.SysFont("Arial", 52, bold=True)
-        self.font_row    = pygame.font.SysFont("Arial", 30, bold=True)
-        self.font_option = pygame.font.SysFont("Arial", 28)
-        self.font_hint   = pygame.font.SysFont("Arial", 22)
+        self.font_row    = pygame.font.SysFont("Arial", 26, bold=True)
+        self.font_sub    = pygame.font.SysFont("Arial", 22)
+        self.font_option = pygame.font.SysFont("Arial", 24)
+        self.font_hint   = pygame.font.SysFont("Arial", 20)
         self.row_index   = 0
         self.selections  = list(defaults) if defaults else [0] * len(rows)
 
     def draw(self):
         self.screen.fill((30, 30, 30))
         title = self.font_title.render("== CONFIGURE GAME ==", True, (255, 200, 0))
-        self.screen.blit(title, title.get_rect(center=(self.width // 2, 100)))
+        self.screen.blit(title, title.get_rect(center=(self.width // 2, 70)))
 
-        ROW_START_Y = 220
-        ROW_SPACING = 120
+        TITLE_BOTTOM = 120
+        HINTS_TOP    = self.height - 50
+        available    = HINTS_TOP - TITLE_BOTTOM
+        row_spacing  = min(100, available // max(len(self.rows), 1))
+        row_start_y  = TITLE_BOTTOM + row_spacing // 2
+
+        start_x = self.width // 2 + 10
+
         for r_idx, row in enumerate(self.rows):
-            row_y = ROW_START_Y + r_idx * ROW_SPACING
-            label_color = (255, 255, 255) if r_idx == self.row_index else (150, 150, 150)
-            label_surf = self.font_row.render(row["label"] + ":", True, label_color)
-            self.screen.blit(label_surf, label_surf.get_rect(midright=(self.width // 2 - 20, row_y)))
+            row_y   = row_start_y + r_idx * row_spacing
+            is_sub  = row.get("sub", False)
+            focused = (self.row_index == r_idx)
 
-            CHIP_SPACING = 160
-            start_x = self.width // 2 + 10
+            label_font  = self.font_sub if is_sub else self.font_row
+            label_color = (255, 255, 255) if focused else ((160, 160, 160) if is_sub else (150, 150, 150))
+            label_x     = self.width // 2 - (30 if is_sub else 20)
+            label_surf  = label_font.render(row["label"] + ":", True, label_color)
+            self.screen.blit(label_surf, label_surf.get_rect(midright=(label_x, row_y)))
+
+            n_opts       = len(row["options"])
+            chip_spacing = min(160, (self.width - start_x - 10) // n_opts)
+
             for o_idx, opt in enumerate(row["options"]):
-                selected = (self.selections[r_idx] == o_idx)
-                focused  = (self.row_index == r_idx)
-                text  = f"< {opt} >" if selected else f"  {opt}  "
-                color = (255, 255, 0) if selected else ((200, 200, 200) if focused else (120, 120, 120))
-                opt_surf = self.font_option.render(text, True, color)
-                cx = start_x + o_idx * CHIP_SPACING + CHIP_SPACING // 2
+                selected  = (self.selections[r_idx] == o_idx)
+                text      = f"< {opt} >" if selected else f"  {opt}  "
+                color     = (255, 255, 0) if selected else ((200, 200, 200) if focused else (110, 110, 110))
+                opt_surf  = self.font_option.render(text, True, color)
+                cx        = start_x + o_idx * chip_spacing + chip_spacing // 2
                 self.screen.blit(opt_surf, opt_surf.get_rect(center=(cx, row_y)))
 
         hint = self.font_hint.render(
             "LEFT/RIGHT: change option    UP/DOWN: move row    ENTER: start    ESC: back",
             True, (100, 100, 100)
         )
-        self.screen.blit(hint, hint.get_rect(center=(self.width // 2, self.height - 60)))
+        self.screen.blit(hint, hint.get_rect(center=(self.width // 2, self.height - 25)))
 
     def handle_input(self):
         """Returns None | "BACK" | "QUIT" | config dict"""
