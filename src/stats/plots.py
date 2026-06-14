@@ -24,10 +24,10 @@ def generate_all(show=False):
     agent2_name = matches[0]['agents'][1]
     colors = ['#2ecc71', '#3498db', '#e74c3c']
 
-    # Criar uma figura grande para o Dashboard (2x2 subplots)
-    fig, axs = plt.subplots(2, 2, figsize=(16, 12))
-    plt.subplots_adjust(hspace=0.3, wspace=0.3)
-    fig.suptitle(f'Bomberia AI Dashboard - {len(matches)} Partidas', fontsize=20, fontweight='bold', y=0.95)
+    # Criar uma figura grande para o Dashboard (3x2 subplots)
+    fig, axs = plt.subplots(3, 2, figsize=(16, 18))
+    plt.subplots_adjust(hspace=0.4, wspace=0.3)
+    fig.suptitle(f'Bomberia AI Dashboard - {len(matches)} Partidas', fontsize=20, fontweight='bold', y=0.96)
 
     # 1. Gráfico de Vitórias (Donut)
     p1_wins = sum(1 for m in matches if m['winner'] == 1)
@@ -50,8 +50,7 @@ def generate_all(show=False):
         axs[0, 1].set_ylim(0, 10)
         axs[0, 1].set_title('Índice de Agressividade (0-10)', fontsize=14, fontweight='bold')
         axs[0, 1].grid(axis='y', linestyle='--', alpha=0.7)
-        for i, v in enumerate([aggressiveness]):
-            axs[0, 1].text(i, v + 0.2, f'{v:.2f}', ha='center', fontweight='bold')
+        axs[0, 1].text(0, aggressiveness + 0.2, f'{aggressiveness:.2f}', ha='center', fontweight='bold')
     else:
         axs[0, 1].text(0.5, 0.5, 'Dados insuficientes', ha='center', va='center')
 
@@ -69,12 +68,32 @@ def generate_all(show=False):
     # 4. Total de Suicídios
     s1 = sum(m.get('suicides', {}).get('1', 0) for m in matches)
     s2 = sum(m.get('suicides', {}).get('2', 0) for m in matches)
-    bars = axs[1, 1].bar([agent1_name, agent2_name], [s1, s2], color=['#2ecc71', '#3498db'])
+    bars_s = axs[1, 1].bar([agent1_name, agent2_name], [s1, s2], color=['#2ecc71', '#3498db'])
     axs[1, 1].set_title('Total de Suicídios', fontsize=14, fontweight='bold')
     axs[1, 1].set_ylabel('Ocorrências')
-    for bar in bars:
+    for bar in bars_s:
         yval = bar.get_height()
         axs[1, 1].text(bar.get_x() + bar.get_width()/2, yval + 0.1, int(yval), ha='center', va='bottom', fontweight='bold')
+
+    # 5. Tempo de Decisão Médio (ms)
+    t1 = np.mean([m.get('avg_decision_time', {}).get('1', 0) for m in matches]) * 1000
+    t2 = np.mean([m.get('avg_decision_time', {}).get('2', 0) for m in matches]) * 1000
+    bars_t = axs[2, 0].bar([agent1_name, agent2_name], [t1, t2], color=['#2ecc71', '#3498db'])
+    axs[2, 0].set_title('Tempo de Decisão Médio', fontsize=14, fontweight='bold')
+    axs[2, 0].set_ylabel('ms')
+    for bar in bars_t:
+        yval = bar.get_height()
+        axs[2, 0].text(bar.get_x() + bar.get_width()/2, yval + 0.1, f'{yval:.1f}ms', ha='center', va='bottom', fontweight='bold')
+
+    # 6. Blocos Destruídos por Partida
+    b1 = np.mean([m.get('blocks_destroyed', {}).get('1', 0) for m in matches])
+    b2 = np.mean([m.get('blocks_destroyed', {}).get('2', 0) for m in matches])
+    bars_b = axs[2, 1].bar([agent1_name, agent2_name], [b1, b2], color=['#2ecc71', '#3498db'])
+    axs[2, 1].set_title('Média de Blocos Destruídos', fontsize=14, fontweight='bold')
+    axs[2, 1].set_ylabel('Blocos')
+    for bar in bars_b:
+        yval = bar.get_height()
+        axs[2, 1].text(bar.get_x() + bar.get_width()/2, yval + 0.1, f'{yval:.1f}', ha='center', va='bottom', fontweight='bold')
 
     # Salvar o Dashboard completo
     dashboard_path = "stats/plots/dashboard.png"

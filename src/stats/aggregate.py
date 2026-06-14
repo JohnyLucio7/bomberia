@@ -28,6 +28,14 @@ def build_report():
     p1_suicides = sum(m.get('suicides', {}).get('1', 0) for m in matches)
     p2_suicides = sum(m.get('suicides', {}).get('2', 0) for m in matches)
     
+    # Médias de eficiência
+    p1_blocks = sum(m.get('blocks_destroyed', {}).get('1', 0) for m in matches) / total
+    p2_blocks = sum(m.get('blocks_destroyed', {}).get('2', 0) for m in matches) / total
+    p1_bombs = sum(m.get('bombs_placed', {}).get('1', 0) for m in matches) / total
+    p2_bombs = sum(m.get('bombs_placed', {}).get('2', 0) for m in matches) / total
+    p1_time = sum(m.get('avg_decision_time', {}).get('1', 0) for m in matches) / total
+    p2_time = sum(m.get('avg_decision_time', {}).get('2', 0) for m in matches) / total
+    
     agent1 = matches[0]['agents'][0]
     agent2 = matches[0]['agents'][1]
 
@@ -41,6 +49,11 @@ def build_report():
         f"=== DESEMPENHO RECENTE (Últimas {r_total} partidas) ===",
         f"Vitorias {agent1}: {r1_wins} ({r1_wins/r_total:.1%})",
         f"Vitorias {agent2}: {r2_wins} ({r2_wins/r_total:.1%})",
+        "",
+        "--- Eficiência e Tempo ---",
+        f"Tempo de Decisão (médio): {agent1}: {p1_time*1000:.2f}ms | {agent2}: {p2_time*1000:.2f}ms",
+        f"Blocos/Partida (médio): {agent1}: {p1_blocks:.1f} | {agent2}: {p2_blocks:.1f}",
+        f"Bombas/Partida (médio): {agent1}: {p1_bombs:.1f} | {agent2}: {p2_bombs:.1f}",
         "",
         "--- Métricas de Comportamento (Global) ---",
         f"Distância média entre jogadores: {avg_dist_all:.2f} blocos",
