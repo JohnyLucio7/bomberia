@@ -1,16 +1,29 @@
+import time
 import pygame
 from src.engine.player import Player
 from src.engine.map import Map
 from src.engine.bomb import Bomb, Explosion
 from src.engine.simulation import SimulatedState
+from src.stats.recorder import MatchRecorder
+from src.stats.store import append_record
 
 class Game:
-    def __init__(self, screen, mode="SMOOTH", agent1=None, agent2=None):
+    def __init__(self, screen, mode="SMOOTH", agent1=None, agent2=None,
+                 agent_names=("MCTS", "Minimax"), record=False,
+                 source="interactive", headless=False):
         self.screen = screen
         self.width, self.height = screen.get_size()
         self.mode = mode
         self.agent1 = agent1
         self.agent2 = agent2
+
+        # Coleta de estatísticas
+        self.agent_names = agent_names
+        self.record = record
+        self.source = source
+        self.headless = headless
+        self.recorder = MatchRecorder(agent_names, source) if record else None
+        self._record_saved = False
         
         self.spritesheet_path = "assets/sprites/Bomberman-spritesheet.png"
         self.map = Map(self.spritesheet_path)
@@ -56,6 +69,8 @@ class Game:
         self.game_over = False
         self.winner = None
         self.waiting_for_step = False
+        self.recorder = MatchRecorder(self.agent_names, self.source) if self.record else None
+        self._record_saved = False
 
     def get_simulated_state(self):
         grid = [row[:] for row in self.map.grid]
@@ -96,7 +111,9 @@ class Game:
         # Player 1 Logic
         if self.agent1:
             if self.player1.x == self.player1.target_x and self.player1.y == self.player1.target_y:
+                t0 = time.perf_counter()
                 p1_action = self.agent1.get_action(self.get_simulated_state())
+                if self.recorder: self.recorder.on_decision(1, time.perf_counter() - t0)
         else:
             if keys[pygame.K_a]: p1_action = "LEFT"
             elif keys[pygame.K_d]: p1_action = "RIGHT"
@@ -107,7 +124,9 @@ class Game:
         # Player 2 Logic
         if self.agent2:
             if self.player2.x == self.player2.target_x and self.player2.y == self.player2.target_y:
+                t0 = time.perf_counter()
                 p2_action = self.agent2.get_action(self.get_simulated_state())
+                if self.recorder: self.recorder.on_decision(2, time.perf_counter() - t0)
         else:
             if keys[pygame.K_LEFT]: p2_action = "LEFT"
             elif keys[pygame.K_RIGHT]: p2_action = "RIGHT"
@@ -135,33 +154,49 @@ class Game:
                 new_bomb.owner = player
                 new_bomb.players_inside.add(player)
                 self.bombs.append(new_bomb)
+                if self.recorder:
+                    self.recorder.on_bomb(1 if player == self.player1 else 2)
 
     def update(self):
-        # Cap dt para evitar que o tempo "pule" se a IA demorar (max 30 FPS logic speed)
-        dt = min(self.clock.tick(60) / 1000.0, 0.033)
+        if self.headless:
+            dt = 0.033
+        else:
+            dt = min(self.clock.tick(60) / 1000.0, 0.033)
         p1_act, p2_act = self.handle_input()
-        
+
         if self.game_over or (p1_act is None and p2_act is None):
             return
+
+        if self.recorder:
+            p1_pos = self.player1.get_grid_pos(self.offset_x, self.offset_y, self.map.display_tile_size)
+            p2_pos = self.player2.get_grid_pos(self.offset_x, self.offset_y, self.map.display_tile_size)
+            dist = abs(p1_pos[0] - p2_pos[0]) + abs(p1_pos[1] - p2_pos[1])
+            self.recorder.on_tick(dist)
 
         if p1_act == "BOMB": self._place_bomb(self.player1)
         if p2_act == "BOMB": self._place_bomb(self.player2)
 
         self.player1.update(dt, self.map, self.offset_x, self.offset_y, self.bombs, p1_act, other_player=self.player2)
         self.player2.update(dt, self.map, self.offset_x, self.offset_y, self.bombs, p2_act, other_player=self.player1)
-        
+
         for bomb in self.bombs[:]:
             bomb.update(dt)
             if bomb.exploded:
-                self.explosions.append(Explosion(bomb.x, bomb.y, bomb.grid_pos, bomb.range, self.map))
+                owner_id = 1 if bomb.owner == self.player1 else 2
+                exp = Explosion(bomb.x, bomb.y, bomb.grid_pos, bomb.range, self.map, owner_id=owner_id)
+                if self.recorder: self.recorder.on_blocks(owner_id, exp.blocks_destroyed)
+                self.explosions.append(exp)
                 self.bombs.remove(bomb)
-        
+
         for exp in self.explosions[:]:
             exp.update(dt)
             if exp.finished: self.explosions.remove(exp)
 
         self._check_death(self.player1)
         self._check_death(self.player2)
+
+        if self.game_over:
+            self.finalize_record()
 
     def _check_death(self, player):
         if player.is_dead:
@@ -175,8 +210,23 @@ class Game:
                 player.is_dead = True
                 player.current_anim = "death"
                 player.frame_index = 0
+                if self.recorder:
+                    victim_id = 1 if player == self.player1 else 2
+                    self.recorder.on_death(victim_id, exp.owner_id)
                 return
         
+    def finalize_record(self):
+        if self._record_saved or not self.recorder:
+            return
+        self._record_saved = True
+        if self.winner == "Player 1":
+            ws = 1
+        elif self.winner == "Player 2":
+            ws = 2
+        else:
+            ws = None  # empate / timeout
+        append_record(self.recorder.finalize(ws))
+
     def draw(self):
         self.screen.fill((50, 50, 50))
         self.map.draw(self.screen, self.offset_x, self.offset_y)

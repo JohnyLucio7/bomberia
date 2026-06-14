@@ -43,13 +43,15 @@ class Bomb:
         screen.blit(self.frames[self.frame_index], (self.x, self.y))
 
 class Explosion:
-    def __init__(self, x, y, grid_pos, bomb_range, game_map, scale=4):
+    def __init__(self, x, y, grid_pos, bomb_range, game_map, scale=4, owner_id=None):
         self.x = x
         self.y = y
         self.grid_pos = grid_pos
-        self.timer = 0.5 
+        self.timer = 0.5
         self.finished = False
         self.scale = scale
+        self.owner_id = owner_id
+        self.blocks_destroyed = 0
         
         from src.engine.utils import SpriteSheet
         ss = SpriteSheet("assets/sprites/Bomberman-spritesheet.png")
@@ -100,6 +102,7 @@ class Explosion:
                     
                     if tile_at_map == 2: # Bloco destrutível
                         game_map.grid[nr][nc] = 0
+                        self.blocks_destroyed += 1
                         self.tiles.append((nr, nc, end_type))
                         break
                     
