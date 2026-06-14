@@ -33,7 +33,7 @@ pip install -r requirements.txt
 python main.py
 ```
 
-## Estatísticas e Monitoramento
+## Estatísticas e Monitoramento!
 
 O projeto conta com um sistema de telemetria para avaliar o desempenho das IAs:
 
