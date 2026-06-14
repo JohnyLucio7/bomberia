@@ -167,7 +167,11 @@ class Game:
         if self.game_over or (p1_act is None and p2_act is None):
             return
 
-        if self.recorder: self.recorder.on_tick()
+        if self.recorder:
+            p1_pos = self.player1.get_grid_pos(self.offset_x, self.offset_y, self.map.display_tile_size)
+            p2_pos = self.player2.get_grid_pos(self.offset_x, self.offset_y, self.map.display_tile_size)
+            dist = abs(p1_pos[0] - p2_pos[0]) + abs(p1_pos[1] - p2_pos[1])
+            self.recorder.on_tick(dist)
 
         if p1_act == "BOMB": self._place_bomb(self.player1)
         if p2_act == "BOMB": self._place_bomb(self.player2)

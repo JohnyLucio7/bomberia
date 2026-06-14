@@ -9,23 +9,14 @@ from src.stats.aggregate import build_report
 from src.stats import plots
 
 
-def _ask_int(prompt, default):
-    try:
-        raw = input(prompt).strip()
-        return int(raw) if raw else default
-    except (ValueError, EOFError):
-        return default
-
-
-def run_tournament_flow(screen):
+def run_tournament_flow(screen, n_matches=20):
     print("\n=== TORNEIO (headless) — MCTS vs Minimax ===")
-    n = _ask_int("Quantas partidas? [20]: ", 20)
-    print(f"Rodando {n} partidas (sem renderização)...")
+    print(f"Rodando {n_matches} partidas (sem renderização)...")
 
     def progress(i, total, winner, turns):
         print(f"  partida {i}/{total}: vencedor={winner} em {turns} turnos")
 
-    run_tournament(screen, n_matches=n, progress_cb=progress)
+    run_tournament(screen, n_matches=n_matches, progress_cb=progress)
     print(build_report())
     paths = plots.generate_all(show=True)
     if paths:
@@ -50,6 +41,14 @@ def run_stats_flow():
 def main():
     pygame.init()
 
+    # Pega número de partidas via argumento (opcional)
+    n_matches = 20
+    if len(sys.argv) > 1:
+        try:
+            n_matches = int(sys.argv[1])
+        except ValueError:
+            pass
+
     # Configurações básicas
     SCREEN_WIDTH = 800
     SCREEN_HEIGHT = 800
@@ -71,7 +70,7 @@ def main():
             if mode == "QUIT":
                 running = False
             elif mode == "TOURNAMENT":
-                run_tournament_flow(screen)
+                run_tournament_flow(screen, n_matches=n_matches)
             elif mode == "STATS":
                 run_stats_flow()
             elif mode:

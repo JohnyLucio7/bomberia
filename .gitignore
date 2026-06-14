@@ -219,4 +219,4 @@ __marimo__/
 .streamlit/secrets.toml
 
 # Bomberia: estatísticas geradas (histórico + gráficos)
-stats/
+/stats/
