@@ -9,27 +9,45 @@ from src.stats.aggregate import build_report
 from src.stats import plots
 
 
+_MCTS_TIMES = {"30ms": 0.03, "100ms": 0.1, "300ms": 0.3, "500ms": 0.5}
+_MM_DEPTHS  = {"1": 1, "2": 2, "3": 3, "4": 4}
+
 _AI_ROWS = [
-    {"label": "Game Mode", "options": ["Smooth", "Step-by-Step"], "key": "mode"},
-    {"label": "Player 1",  "options": ["MCTS", "Minimax"],        "key": "agent1_key"},
-    {"label": "Player 2",  "options": ["MCTS", "Minimax"],        "key": "agent2_key"},
+    {"label": "Game Mode",        "options": ["Smooth", "Step-by-Step"],          "key": "mode"},
+    {"label": "Player 1",         "options": ["MCTS", "Minimax"],                  "key": "agent1_key"},
+    {"label": "  MCTS Time",      "options": ["30ms", "100ms", "300ms", "500ms"], "key": "agent1_mcts_time",  "sub": True},
+    {"label": "  Minimax Depth",  "options": ["1", "2", "3", "4"],                "key": "agent1_mm_depth",   "sub": True},
+    {"label": "Player 2",         "options": ["MCTS", "Minimax"],                  "key": "agent2_key"},
+    {"label": "  MCTS Time",      "options": ["30ms", "100ms", "300ms", "500ms"], "key": "agent2_mcts_time",  "sub": True},
+    {"label": "  Minimax Depth",  "options": ["1", "2", "3", "4"],                "key": "agent2_mm_depth",   "sub": True},
 ]
 _HUMAN_ROWS = [
-    {"label": "Game Mode", "options": ["Smooth", "Step-by-Step"], "key": "mode"},
-    {"label": "Opponent",  "options": ["MCTS", "Minimax"],        "key": "agent2_key"},
+    {"label": "Game Mode",       "options": ["Smooth", "Step-by-Step"],          "key": "mode"},
+    {"label": "AI Opponent",     "options": ["MCTS", "Minimax"],                  "key": "agent2_key"},
+    {"label": "  MCTS Time",     "options": ["30ms", "100ms", "300ms", "500ms"], "key": "agent2_mcts_time",  "sub": True},
+    {"label": "  Minimax Depth", "options": ["1", "2", "3", "4"],                "key": "agent2_mm_depth",   "sub": True},
 ]
 
 
 def _make_agents(config):
-    def _build(key, player_id):
-        v = config.get(key, "Human")
-        if v == "MCTS":    return MCTSAgent(player_id, time_limit=0.3)
-        if v == "Minimax": return MinimaxAgent(player_id, depth=2)
-        return None
     mode_label = config.get("mode", "Smooth")
     mode  = "SMOOTH" if mode_label == "Smooth" else "STEP"
-    a1    = _build("agent1_key", 1)
-    a2    = _build("agent2_key", 2)
+    smooth = (mode == "SMOOTH")
+
+    def _build(type_key, mcts_key, mm_key, player_id):
+        v = config.get(type_key, "Human")
+        if v == "MCTS":
+            default_time = "30ms" if smooth else "300ms"
+            t = _MCTS_TIMES.get(config.get(mcts_key, default_time), 0.03 if smooth else 0.3)
+            return MCTSAgent(player_id, time_limit=t)
+        if v == "Minimax":
+            default_depth = "1" if smooth else "2"
+            d = _MM_DEPTHS.get(config.get(mm_key, default_depth), 1 if smooth else 2)
+            return MinimaxAgent(player_id, depth=d)
+        return None
+
+    a1    = _build("agent1_key", "agent1_mcts_time", "agent1_mm_depth", 1)
+    a2    = _build("agent2_key", "agent2_mcts_time", "agent2_mm_depth", 2)
     names = (config.get("agent1_key", "Human"), config.get("agent2_key", "Human"))
     return a1, a2, names, mode
 
@@ -109,11 +127,14 @@ def main():
                 run_stats_flow()
             elif mode:
                 if mode == "SMOOTH":
-                    agent_menu = AgentSelectMenu(screen, _AI_ROWS, defaults=[0, 0, 1])
+                    # Smooth, P1=MCTS/30ms/d1, P2=Minimax/30ms/d1
+                    agent_menu = AgentSelectMenu(screen, _AI_ROWS, defaults=[0, 0, 0, 0, 1, 0, 0])
                 elif mode == "STEP":
-                    agent_menu = AgentSelectMenu(screen, _AI_ROWS, defaults=[1, 0, 0])
+                    # Step, P1=MCTS/300ms/d2, P2=MCTS/300ms/d2
+                    agent_menu = AgentSelectMenu(screen, _AI_ROWS, defaults=[1, 0, 2, 1, 0, 2, 1])
                 elif mode == "HUMAN_VS_AI":
-                    agent_menu = AgentSelectMenu(screen, _HUMAN_ROWS, defaults=[0, 0])
+                    # Smooth, oponent=MCTS/30ms/d1
+                    agent_menu = AgentSelectMenu(screen, _HUMAN_ROWS, defaults=[0, 0, 0, 0])
                 state = "AGENT_SELECT"
 
             menu.draw()
