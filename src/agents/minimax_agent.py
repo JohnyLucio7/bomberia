@@ -6,6 +6,7 @@ class MinimaxAgent(BaseAgent):
         super().__init__(player_id)
         self.depth = depth
         self.pos_history = []
+        self._HISTORY_LEN = 8
 
     def get_action(self, state):
         safety_map = state.get_safety_map()
@@ -58,7 +59,9 @@ class MinimaxAgent(BaseAgent):
 
             new_pos = new_state.p1_pos if self.player_id == 1 else new_state.p2_pos
             if new_pos in self.pos_history:
-                val -= 80
+                recency = self.pos_history.index(new_pos)
+                penalty = 80 + (recency / max(len(self.pos_history) - 1, 1)) * 120
+                val -= penalty
 
             if val > best_val:
                 best_val = val
@@ -66,9 +69,9 @@ class MinimaxAgent(BaseAgent):
             elif val == best_val and action != "IDLE" and best_action == "IDLE":
                 best_action = action
 
-        # Atualiza histórico (mantém só as últimas 2 posições)
+        # Atualiza histórico
         self.pos_history.append(my_pos)
-        if len(self.pos_history) > 2:
+        if len(self.pos_history) > self._HISTORY_LEN:
             self.pos_history.pop(0)
 
         return best_action
