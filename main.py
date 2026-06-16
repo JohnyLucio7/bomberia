@@ -9,8 +9,8 @@ from src.stats.aggregate import build_report
 from src.stats import plots
 
 
-_MCTS_TIMES = {"30ms": 0.03, "100ms": 0.1, "300ms": 0.3, "500ms": 0.5}
-_MM_DEPTHS  = {"1": 1, "2": 2, "3": 3, "4": 4}
+_MCTS_TIMES = {"30ms": 0.03, "100ms": 0.1, "300ms": 0.3, "500ms": 0.5, "1s": 1.0}
+_MM_DEPTHS  = {"1": 1, "2": 2, "3": 3, "4": 4, "5": 5}
 
 _AI_ROWS = [
     {"label": "Game Mode",        "options": ["Smooth", "Step-by-Step"],          "key": "mode"},
@@ -26,6 +26,11 @@ _HUMAN_ROWS = [
     {"label": "AI Opponent",     "options": ["MCTS", "Minimax"],                  "key": "agent2_key"},
     {"label": "  MCTS Time",     "options": ["30ms", "100ms", "300ms", "500ms"], "key": "agent2_mcts_time",  "sub": True},
     {"label": "  Minimax Depth", "options": ["1", "2", "3", "4"],                "key": "agent2_mm_depth",   "sub": True},
+]
+_TOURNAMENT_ROWS = [
+    {"label": "Matches",         "options": ["50", "300", "1000"],               "key": "n_matches"},
+    {"label": "MCTS Time Limit", "options": ["100ms", "300ms", "500ms", "1s"],   "key": "mcts_time"},
+    {"label": "Minimax Depth",   "options": ["1", "2", "3", "4"],                "key": "minimax_depth"},
 ]
 
 
@@ -60,30 +65,34 @@ def _ask_int(prompt, default):
         return default
 
 
-def run_tournament_flow(screen, n_matches=20):
+def run_tournament_flow(screen, n_matches=20, mcts_time_limit=0.3, minimax_depth=1):
     print("\n=== TORNEIO (headless) — MCTS vs Minimax ===")
     print(f"Rodando {n_matches} partidas (sem renderização)...")
 
     def progress(i, total, winner, turns):
         print(f"  partida {i}/{total}: vencedor={winner} em {turns} turnos")
 
-    run_tournament(screen, n_matches=n_matches, progress_cb=progress)
-    print(build_report())
-    paths = plots.generate_all(show=True)
+    run_tournament(screen, n_matches=n_matches, progress_cb=progress,
+                   mcts_time_limit=mcts_time_limit, minimax_depth=minimax_depth)
+    
+    # Tournament only stats
+    print(build_report(source_filter="batch"))
+    paths = plots.generate_all(show=True, source_filter="batch")
     if paths:
-        print("\nGráficos gerados:")
+        print("\nGráficos gerados (Apenas Torneio):")
         for p in paths:
             print(f"  {p}")
     print("Voltando ao menu...\n")
 
 
 def run_stats_flow():
+    # Full historical stats
     print(build_report())
     paths = plots.generate_all(show=True)
     if not paths:
         print("Sem dados para gerar gráficos ainda.")
     else:
-        print("\nGráficos gerados:")
+        print("\nGráficos gerados (Histórico Geral):")
         for p in paths:
             print(f"  {p}")
     print("Voltando ao menu...\n")
@@ -122,7 +131,8 @@ def main():
             if mode == "QUIT":
                 running = False
             elif mode == "TOURNAMENT":
-                run_tournament_flow(screen, n_matches=n_matches)
+                agent_menu = AgentSelectMenu(screen, _TOURNAMENT_ROWS, defaults=[0, 1, 0])
+                state = "TOURNAMENT_SELECT"
             elif mode == "STATS":
                 run_stats_flow()
             elif mode:
@@ -151,6 +161,22 @@ def main():
                 game = Game(screen, mode=game_mode, agent1=a1, agent2=a2,
                             agent_names=names, record=True, source="interactive")
                 state = "GAME"
+
+            agent_menu.draw()
+            pygame.display.flip()
+
+        elif state == "TOURNAMENT_SELECT":
+            result = agent_menu.handle_input()
+            if result == "QUIT":
+                running = False
+            elif result == "BACK":
+                state = "MENU"
+            elif result is not None:
+                n = int(result["n_matches"])
+                t = _MCTS_TIMES.get(result["mcts_time"], 0.3)
+                d = _MM_DEPTHS.get(result["minimax_depth"], 1)
+                run_tournament_flow(screen, n_matches=n, mcts_time_limit=t, minimax_depth=d)
+                state = "MENU"
 
             agent_menu.draw()
             pygame.display.flip()
