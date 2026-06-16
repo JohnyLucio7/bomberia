@@ -13,23 +13,44 @@ def _make_agent(name, player_id, mcts_time_limit, minimax_depth):
     raise ValueError(f"Agente desconhecido: {name}")
 
 
-def run_tournament(screen, n_matches=20, swap_sides=True, max_turns=3000,
-                   mcts_time_limit=0.02, minimax_depth=1, progress_cb=None):
-    """Roda N partidas MCTS vs Minimax em modo headless (sem renderização).
-
-    - swap_sides: alterna quem joga como jogador 1/2 a cada partida (fairness).
-    - max_turns: cap anti-stalemate; ao atingir, a partida é registrada como empate/timeout.
-    - progress_cb(i, n, winner_name, turns): callback opcional de progresso.
-
-    Cada partida é anexada a stats/history.jsonl com source="batch".
-    Retorna o nº de partidas concluídas.
-    """
+def run_tournament(screen, n_matches=20, swap_sides=True, max_turns=1000,
+                   mcts_time_limit=0.3, minimax_depth=1, progress_cb=None):
+    """Roda N partidas MCTS vs Minimax em modo headless (sem renderização)."""
     completed = 0
+    stats = {"MCTS": 0, "Minimax": 0, "DRAW/timeout": 0}
+
+    font = pygame.font.SysFont("Arial", 24)
+    font_bold = pygame.font.SysFont("Arial", 32, bold=True)
+
+    def draw_progress(current, total, last_winner=None):
+        screen.fill((30, 30, 30))
+        title = font_bold.render(f"TOURNAMENT PROGRESS: {current}/{total}", True, (255, 200, 0))
+        screen.blit(title, title.get_rect(center=(screen.get_width() // 2, 100)))
+
+        y = 200
+        for name, wins in stats.items():
+            color = (200, 200, 200)
+            if name == "MCTS": color = (100, 100, 255)
+            if name == "Minimax": color = (255, 100, 100)
+
+            txt = font.render(f"{name}: {wins} wins", True, color)
+            screen.blit(txt, txt.get_rect(center=(screen.get_width() // 2, y)))
+            y += 40
+
+        if last_winner:
+            msg = font.render(f"Last Match: {last_winner}", True, (150, 150, 150))
+            screen.blit(msg, msg.get_rect(center=(screen.get_width() // 2, y + 40)))
+
+        pygame.display.flip()
+
     for m in range(n_matches):
+        draw_progress(m, n_matches)
+
         if swap_sides and m % 2 == 1:
             side1_name, side2_name = "Minimax", "MCTS"
         else:
             side1_name, side2_name = "MCTS", "Minimax"
+
 
         agent1 = _make_agent(side1_name, 1, mcts_time_limit, minimax_depth)
         agent2 = _make_agent(side2_name, 2, mcts_time_limit, minimax_depth)
@@ -47,14 +68,19 @@ def run_tournament(screen, n_matches=20, swap_sides=True, max_turns=3000,
             game.winner = None
             game.finalize_record()
 
+        if game.winner == "Player 1":
+            winner_name = side1_name
+        elif game.winner == "Player 2":
+            winner_name = side2_name
+        else:
+            winner_name = "DRAW/timeout"
+            
+        stats[winner_name] += 1
         completed += 1
+        
         if progress_cb:
-            if game.winner == "Player 1":
-                winner_name = side1_name
-            elif game.winner == "Player 2":
-                winner_name = side2_name
-            else:
-                winner_name = "DRAW/timeout"
             progress_cb(m + 1, n_matches, winner_name, game.recorder.turns)
 
+    # Final update after last match
+    draw_progress(n_matches, n_matches, winner_name)
     return completed
